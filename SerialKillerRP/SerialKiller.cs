@@ -47,6 +47,9 @@ public class SerialKiller : Script
     private static readonly Anim PUTDOWN  = new Anim("pickup_object", "putdown_low", 0);  // abaixar pra soltar
     // pegar/soltar corpo (metodo do LosSantosSerialKiller - fica ancorado ao chao)
     private static readonly Anim SNOW_PICK = new Anim("anim@mp_snowball", "pickup_snowball", 0);
+    // carregar corpo: box_carry idle como SECONDARY (flag 49) = nao trava o andar.
+    // re-aplicada todo tick pelo MaintainCarry (jeito do mod de referencia).
+    private static readonly Anim CARRY_BODY = new Anim("anim@heists@box_carry@", "idle", 49);
     private static readonly Anim MASK     = new Anim("mp_masks@on_foot", "put_on_mask", 0);            // colocar mascara
     private static readonly Anim CLEAN    = new Anim("timetable@floyd@clean_kitchen@base", "base", 1); // limpar vestigios
 
@@ -74,6 +77,7 @@ public class SerialKiller : Script
     private bool   wrapFade = true;
     private float corpOffX=-0.08f, corpOffY=0.22f, corpOffZ=-0.18f;
     private float corpRotX=0f,     corpRotY=45f,   corpRotZ=90f;
+    private int   corpBone=11816;  // CarryBone do mod de referencia
 
     // sistema de evidencias / suspeita
     private bool showEvidence = true;
@@ -149,6 +153,7 @@ public class SerialKiller : Script
         wrapFade    = s.GetValue("Body", "WrapFade", true);
         corpOffX = s.GetValue("Offsets", "CorpseOffX", -0.08f); corpOffY = s.GetValue("Offsets", "CorpseOffY", 0.22f); corpOffZ = s.GetValue("Offsets", "CorpseOffZ", -0.18f);
         corpRotX = s.GetValue("Offsets", "CorpseRotX", 0f);     corpRotY = s.GetValue("Offsets", "CorpseRotY", 45f);   corpRotZ = s.GetValue("Offsets", "CorpseRotZ", 90f);
+        corpBone = s.GetValue("Offsets", "CorpseBone", 11816);
 
         showEvidence = s.GetValue("Evidence", "ShowSuspicionBar", true);
         maskDrawable = s.GetValue("Evidence", "MaskDrawable", 5);
@@ -197,6 +202,9 @@ public class SerialKiller : Script
             Function.Call(Hash.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS, p, true);
             Function.Call(Hash.SET_PED_CAN_RAGDOLL, p, false);
         }
+
+        // mantem o corpo carregado estavel (re-aplica anim + attach)
+        MaintainCarry();
 
         // suspeita esfria bem devagar quando voce nao faz nada
         if (heat > 0f) heat -= 0.02f;
@@ -344,13 +352,13 @@ public class SerialKiller : Script
         // ---- ja carregando um corpo -> larga no chao ----
         if (carryingBody && bodyProp != null && bodyProp.Exists())
         {
-            Function.Call(Hash.RESET_PED_MOVEMENT_CLIPSET, player, 0.0f);
+            carryingBody = false;
+            Function.Call(Hash.CLEAR_PED_SECONDARY_TASK, player);
             PlayAnimBlocking(player, SNOW_PICK, 700);
             bodyProp.Detach();
             Function.Call(Hash.SET_ENTITY_COLLISION, bodyProp, true, true);
             Function.Call(Hash.PLACE_OBJECT_ON_GROUND_PROPERLY, bodyProp);
             bodyProp.IsPositionFrozen = true;
-            carryingBody = false;
             Notify("~y~Voce largou o corpo.");
             return;
         }
@@ -377,17 +385,12 @@ public class SerialKiller : Script
         cm.MarkAsNoLongerNeeded();
         if (bodyProp == null || !bodyProp.Exists()) { if (wrapFade) Function.Call(Hash.DO_SCREEN_FADE_IN, 400); return; }
 
-        // prende na mao e ativa o box_carry (anda normal segurando)
-        int bone = Function.Call<int>(Hash.GET_PED_BONE_INDEX, player, 57005 /*SKEL_R_Hand*/);
-        Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, bodyProp, player, bone,
-            corpOffX, corpOffY, corpOffZ, corpRotX, corpRotY, corpRotZ,
-            true, true, false, true, 1, true);
+        // prende na mao (bone 11816 = mesmo do mod de referencia)
         Function.Call(Hash.SET_ENTITY_COLLISION, bodyProp, false, false);
+        AttachBodyToHand(player);
 
-        Function.Call(Hash.REQUEST_CLIP_SET, "anim@heists@box_carry@");
-        int t = 0;
-        while (!Function.Call<bool>(Hash.HAS_CLIP_SET_LOADED, "anim@heists@box_carry@") && t < 100) { Wait(0); t++; }
-        Function.Call(Hash.SET_PED_MOVEMENT_CLIPSET, player, "anim@heists@box_carry@", 1.0f);
+        // box_carry idle como secondary (nao trava andar). MaintainCarry re-aplica.
+        PlayAnim(player, CARRY_BODY, -1);
 
         if (wrapFade) Function.Call(Hash.DO_SCREEN_FADE_IN, 600);
         carryingBody = true;
@@ -406,8 +409,8 @@ public class SerialKiller : Script
         if (veh == null) { Notify("~r~Nenhum veiculo por perto."); return; }
 
         Ped player = Game.Player.Character;
-        Function.Call(Hash.RESET_PED_MOVEMENT_CLIPSET, player, 0.0f);
         carryingBody = false;
+        Function.Call(Hash.CLEAR_PED_SECONDARY_TASK, player);
 
         OpenTrunk(veh);
         Wait(900);
@@ -797,6 +800,31 @@ public class SerialKiller : Script
     {
         PlayAnim(ped, a, ms < 0 ? -1 : ms);
         if (ms > 0) Wait(ms);
+    }
+
+    // Prende o corpo-prop na mao do player (bone/offsets do mod de referencia)
+    private void AttachBodyToHand(Ped player)
+    {
+        if (bodyProp == null || !bodyProp.Exists()) return;
+        int bone = Function.Call<int>(Hash.GET_PED_BONE_INDEX, player, corpBone);
+        Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, bodyProp, player, bone,
+            corpOffX, corpOffY, corpOffZ, corpRotX, corpRotY, corpRotZ,
+            true, true, false, true, 1, true);
+    }
+
+    // Mantem o corpo carregado estavel: re-aplica a anim e o attach todo tick
+    // (jeito do MaintainCarryState do LosSantosSerialKiller).
+    private void MaintainCarry()
+    {
+        if (!carryingBody) return;
+        Ped player = Game.Player.Character;
+        if (bodyProp == null || !bodyProp.Exists()) { carryingBody = false; return; }
+
+        if (!Function.Call<bool>(Hash.IS_ENTITY_PLAYING_ANIM, player, CARRY_BODY.Dict, CARRY_BODY.Name, 3))
+            PlayAnim(player, CARRY_BODY, -1);
+
+        if (!Function.Call<bool>(Hash.IS_ENTITY_ATTACHED_TO_ENTITY, bodyProp, player))
+            AttachBodyToHand(player);
     }
 
     // Tenta carregar o primeiro modelo valido da lista. Retorna Model (Hash==0 se falhou).
