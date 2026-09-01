@@ -49,7 +49,8 @@ public class SerialKiller : Script
     private static readonly Anim CLEAN    = new Anim("timetable@floyd@clean_kitchen@base", "base", 1); // limpar vestigios
 
     // -------------------- config (lido do .ini) ------------------------------
-    private Keys kBag, kBagTrunk, kTie, kCarry, kVicTrunk, kKnife, kDrag, kDig, kPanic, kMask, kClean;
+    private Keys kBag, kBagTrunk, kTie, kCarry, kVicTrunk, kKnife, kDrag, kDig, kPanic, kMask, kClean, kHud;
+    private bool showNotifications = false;   // clean: nenhuma notificacao por padrao
     private float interactDist = 2.5f;
     private float vehicleDist  = 3.5f;
     private string bagModel   = "prop_cs_rub_binbag_01";
@@ -115,6 +116,7 @@ public class SerialKiller : Script
         kPanic    = ParseKey(s.GetValue("Keys", "PanicReset",    "NumPad9"), Keys.NumPad9);
         kMask     = ParseKey(s.GetValue("Keys", "MaskToggle",    "NumPad0"), Keys.NumPad0);
         kClean    = ParseKey(s.GetValue("Keys", "CleanEvidence", "Decimal"), Keys.Decimal);
+        kHud      = ParseKey(s.GetValue("Keys", "ToggleHud",     "Subtract"), Keys.Subtract);
 
         interactDist = s.GetValue("Settings", "InteractDistance", 2.5f);
         vehicleDist  = s.GetValue("Settings", "VehicleDistance",  3.5f);
@@ -123,6 +125,7 @@ public class SerialKiller : Script
         shovelModel  = s.GetValue("Settings", "ShovelModel","prop_tool_shovel");
         showHelp     = s.GetValue("Settings", "ShowHelpUI", true);
         cinematicKill= s.GetValue("Settings", "CinematicKill", true);
+        showNotifications = s.GetValue("Settings", "ShowNotifications", false);
 
         bagOffX = s.GetValue("Offsets", "BagOffX", 0.12f); bagOffY = s.GetValue("Offsets", "BagOffY", 0.02f); bagOffZ = s.GetValue("Offsets", "BagOffZ", -0.03f);
         bagRotX = s.GetValue("Offsets", "BagRotX", 0f);    bagRotY = s.GetValue("Offsets", "BagRotY", 90f);   bagRotZ = s.GetValue("Offsets", "BagRotZ", 0f);
@@ -162,6 +165,7 @@ public class SerialKiller : Script
         else if (e.KeyCode == kPanic)    PanicReset();
         else if (e.KeyCode == kMask)     ToggleMask();
         else if (e.KeyCode == kClean)    CleanEvidence();
+        else if (e.KeyCode == kHud)      { showHelp = !showHelp; showEvidence = !showEvidence; }
     }
 
     // =========================================================================
@@ -769,6 +773,7 @@ public class SerialKiller : Script
 
     private void Notify(string msg)
     {
+        if (!showNotifications) return;   // clean: sem notificacoes
         Function.Call(Hash.BEGIN_TEXT_COMMAND_THEFEED_POST, "STRING");
         Function.Call(Hash.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME, msg);
         Function.Call(Hash.END_TEXT_COMMAND_THEFEED_POST_TICKER, false, true);
@@ -806,7 +811,8 @@ public class SerialKiller : Script
             "~s~" + KeyNum(kDig)      + " Cavar/enterrar",
             "~s~" + KeyNum(kMask)     + " Mascara",
             "~s~" + KeyName(kClean)   + " Limpar vestigios",
-            "~s~" + KeyNum(kPanic)    + " PANICO (reset)"
+            "~s~" + KeyNum(kPanic)    + " PANICO (reset)",
+            "~s~" + KeyName(kHud)     + " Esconder este menu"
         };
 
         float y = 0.24f;
