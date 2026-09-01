@@ -32,9 +32,9 @@ public class SerialKiller : Script
         public Anim(string d, string n, int f) { Dict = d; Name = n; Flag = f; } }
 
     private static readonly Anim TIED     = new Anim("mp_arresting", "idle", 49);
-    // carregar: os dois clipes vem da MESMA cena sincronizada do final do jogo.
-    // camman = quem carrega, greg = o corpo carregado. Assim eles encaixam.
-    private static readonly Anim CARRY_ME = new Anim("missfinale_c2mcs_1", "fin_c2_mcs_1_camman", 17);
+    // carregar: camman = quem carrega (secondary=49, nao trava o andar),
+    // greg = o corpo carregado (full-body=1, fica sempre posado no ombro).
+    private static readonly Anim CARRY_ME = new Anim("missfinale_c2mcs_1", "fin_c2_mcs_1_camman", 49);
     private static readonly Anim CARRY_HIM= new Anim("missfinale_c2mcs_1", "fin_c2_mcs_1_greg", 1);
     private static readonly Anim KNIFE    = new Anim("melee@knife@streamed_core", "plyr_takedown_front_slice", 0);
     private static readonly Anim DRAG_BODY= new Anim("combat@damage@writhe", "writhe_loop", 1);
@@ -53,7 +53,7 @@ public class SerialKiller : Script
     private bool showNotifications = false;   // clean: nenhuma notificacao por padrao
     private float interactDist = 2.5f;
     private float vehicleDist  = 3.5f;
-    private string bagModel   = "prop_cs_rub_binbag_01";
+    private string bagModel   = "prop_rub_binbag_01";
     private string bagClipset = "anim@heists@box_carry@";
     private string shovelModel= "prop_tool_shovel";
     private bool showHelp = true;
@@ -62,7 +62,7 @@ public class SerialKiller : Script
     // offsets ajustaveis (edite no .ini e aperte Insert pra recarregar)
     private float bagOffX = 0.12f, bagOffY = 0.02f, bagOffZ = -0.03f;
     private float bagRotX = 0f,    bagRotY = 90f,   bagRotZ = 0f;
-    private float carOffX = 0.00f, carOffY = 0.00f, carOffZ = 0.00f;
+    private float carOffX = 0.27f, carOffY = 0.16f, carOffZ = 0.63f;
     private float carRotX = 0f,    carRotY = 0f,    carRotZ = 0f;
     private float dragOffX= 0.0f,  dragOffY=-0.85f, dragOffZ=-0.55f;
     private float dragRotX= 0f,    dragRotY= 90f,   dragRotZ= 0f;
@@ -120,7 +120,7 @@ public class SerialKiller : Script
 
         interactDist = s.GetValue("Settings", "InteractDistance", 2.5f);
         vehicleDist  = s.GetValue("Settings", "VehicleDistance",  3.5f);
-        bagModel     = s.GetValue("Settings", "BagModel",   "prop_cs_rub_binbag_01");
+        bagModel     = s.GetValue("Settings", "BagModel",   "prop_rub_binbag_01");
         bagClipset   = s.GetValue("Settings", "BagClipset", "anim@heists@box_carry@");
         shovelModel  = s.GetValue("Settings", "ShovelModel","prop_tool_shovel");
         showHelp     = s.GetValue("Settings", "ShowHelpUI", true);
@@ -129,7 +129,7 @@ public class SerialKiller : Script
 
         bagOffX = s.GetValue("Offsets", "BagOffX", 0.12f); bagOffY = s.GetValue("Offsets", "BagOffY", 0.02f); bagOffZ = s.GetValue("Offsets", "BagOffZ", -0.03f);
         bagRotX = s.GetValue("Offsets", "BagRotX", 0f);    bagRotY = s.GetValue("Offsets", "BagRotY", 90f);   bagRotZ = s.GetValue("Offsets", "BagRotZ", 0f);
-        carOffX = s.GetValue("Offsets", "CarryOffX", 0.00f); carOffY = s.GetValue("Offsets", "CarryOffY", 0.00f); carOffZ = s.GetValue("Offsets", "CarryOffZ", 0.00f);
+        carOffX = s.GetValue("Offsets", "CarryOffX", 0.27f); carOffY = s.GetValue("Offsets", "CarryOffY", 0.16f); carOffZ = s.GetValue("Offsets", "CarryOffZ", 0.63f);
         carRotX = s.GetValue("Offsets", "CarryRotX", 0f);    carRotY = s.GetValue("Offsets", "CarryRotY", 0f);     carRotZ = s.GetValue("Offsets", "CarryRotZ", 0f);
         dragOffX= s.GetValue("Offsets", "DragOffX", 0.0f);   dragOffY= s.GetValue("Offsets", "DragOffY", -0.85f);  dragOffZ= s.GetValue("Offsets", "DragOffZ", -0.55f);
         dragRotX= s.GetValue("Offsets", "DragRotX", 0f);     dragRotY= s.GetValue("Offsets", "DragRotY", 90f);     dragRotZ= s.GetValue("Offsets", "DragRotZ", 0f);
@@ -202,11 +202,21 @@ public class SerialKiller : Script
     private void PickUpBag()
     {
         Ped player = Game.Player.Character;
-        Model m = new Model(bagModel);
-        m.Request(1000);
-        int mt = 0;
-        while (!m.IsLoaded && mt < 100) { Wait(10); mt++; }
-        if (!m.IsLoaded) { Notify("~r~Falha ao carregar o prop do saco."); return; }
+        // tenta o modelo do ini e, se nao carregar, cai em props de mundo
+        // que sempre existem (o "cs_" original eh de cutscene e falha no free).
+        string[] candidates = { bagModel, "prop_rub_binbag_01", "prop_rub_binbag_sd_01", "prop_rub_binbag_03b", "prop_cs_rub_binbag_01" };
+        Model m = new Model(0);
+        bool loaded = false;
+        foreach (string name in candidates)
+        {
+            m = new Model(name);
+            if (!m.IsValid) continue;
+            m.Request(1000);
+            int mt = 0;
+            while (!m.IsLoaded && mt < 60) { Wait(10); mt++; }
+            if (m.IsLoaded) { loaded = true; break; }
+        }
+        if (!loaded) { Notify("~r~Nenhum modelo de saco carregou."); return; }
 
         bagProp = World.CreateProp(m, player.Position, false, false);
         m.MarkAsNoLongerNeeded();
