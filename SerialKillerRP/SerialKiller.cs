@@ -58,7 +58,7 @@ public class SerialKiller : Script
     private bool showNotifications = false;   // clean: nenhuma notificacao por padrao
     private float interactDist = 2.5f;
     private float vehicleDist  = 3.5f;
-    private string bagModel   = "prop_rub_binbag_01";
+    private string bagModel   = "prop_cs_rub_binbag_01";
     private string bagClipset = "anim@heists@box_carry@";
     private string shovelModel= "prop_tool_shovel";
     private bool showHelp = true;
@@ -66,7 +66,7 @@ public class SerialKiller : Script
 
     // offsets ajustaveis (edite no .ini e aperte Insert pra recarregar)
     private float bagOffX = 0.12f, bagOffY = 0.02f, bagOffZ = -0.03f;
-    private float bagRotX = 0f,    bagRotY = 90f,   bagRotZ = 0f;
+    private float bagRotX = 180f,  bagRotY = 90f,   bagRotZ = 0f;
     private float carOffX = 0.27f, carOffY = 0.16f, carOffZ = 0.63f;
     private float carRotX = 0f,    carRotY = 0f,    carRotZ = 0f;
     private float dragOffX= 0.0f,  dragOffY=-0.85f, dragOffZ=-0.55f;
@@ -135,7 +135,7 @@ public class SerialKiller : Script
 
         interactDist = s.GetValue("Settings", "InteractDistance", 2.5f);
         vehicleDist  = s.GetValue("Settings", "VehicleDistance",  3.5f);
-        bagModel     = s.GetValue("Settings", "BagModel",   "prop_rub_binbag_01");
+        bagModel     = s.GetValue("Settings", "BagModel",   "prop_cs_rub_binbag_01");
         bagClipset   = s.GetValue("Settings", "BagClipset", "anim@heists@box_carry@");
         shovelModel  = s.GetValue("Settings", "ShovelModel","prop_tool_shovel");
         showHelp     = s.GetValue("Settings", "ShowHelpUI", true);
@@ -143,7 +143,7 @@ public class SerialKiller : Script
         showNotifications = s.GetValue("Settings", "ShowNotifications", false);
 
         bagOffX = s.GetValue("Offsets", "BagOffX", 0.12f); bagOffY = s.GetValue("Offsets", "BagOffY", 0.02f); bagOffZ = s.GetValue("Offsets", "BagOffZ", -0.03f);
-        bagRotX = s.GetValue("Offsets", "BagRotX", 0f);    bagRotY = s.GetValue("Offsets", "BagRotY", 90f);   bagRotZ = s.GetValue("Offsets", "BagRotZ", 0f);
+        bagRotX = s.GetValue("Offsets", "BagRotX", 180f);  bagRotY = s.GetValue("Offsets", "BagRotY", 90f);   bagRotZ = s.GetValue("Offsets", "BagRotZ", 0f);
         carOffX = s.GetValue("Offsets", "CarryOffX", 0.27f); carOffY = s.GetValue("Offsets", "CarryOffY", 0.16f); carOffZ = s.GetValue("Offsets", "CarryOffZ", 0.63f);
         carRotX = s.GetValue("Offsets", "CarryRotX", 0f);    carRotY = s.GetValue("Offsets", "CarryRotY", 0f);     carRotZ = s.GetValue("Offsets", "CarryRotZ", 0f);
         dragOffX= s.GetValue("Offsets", "DragOffX", 0.0f);   dragOffY= s.GetValue("Offsets", "DragOffY", -0.85f);  dragOffZ= s.GetValue("Offsets", "DragOffZ", -0.55f);
@@ -226,33 +226,24 @@ public class SerialKiller : Script
     private void PickUpBag()
     {
         Ped player = Game.Player.Character;
-        // tenta o modelo do ini e, se nao carregar, cai em props de mundo
-        // que sempre existem (o "cs_" original eh de cutscene e falha no free).
-        string[] candidates = { bagModel, "prop_rub_binbag_01", "prop_rub_binbag_sd_01", "prop_rub_binbag_03b", "prop_cs_rub_binbag_01" };
-        Model m = new Model(0);
-        bool loaded = false;
-        foreach (string name in candidates)
-        {
-            m = new Model(name);
-            if (!m.IsValid) continue;
-            m.Request(1000);
-            int mt = 0;
-            while (!m.IsLoaded && mt < 60) { Wait(10); mt++; }
-            if (m.IsLoaded) { loaded = true; break; }
-        }
-        if (!loaded) { Notify("~r~Nenhum modelo de saco carregou."); return; }
+        // EXATAMENTE como a v1 que funcionava (o saco aparecia, so estava de cabeca
+        // pra baixo). Modelo cs_ carrega no seu jogo. Attach com isPed=true (v1).
+        Model m = new Model(bagModel);
+        m.Request(1000);
+        int mt = 0;
+        while (!m.IsLoaded && mt < 100) { Wait(10); mt++; }
+        if (!m.IsLoaded) { Notify("~r~Falha ao carregar o prop do saco."); return; }
 
         bagProp = World.CreateProp(m, player.Position, false, false);
         m.MarkAsNoLongerNeeded();
         if (bagProp == null || !bagProp.Exists()) { Notify("~r~Nao consegui criar o saco."); return; }
 
-        // prende na mao direita. IMPORTANTE: isPed=false (eh um PROP!) e vertex=2,
-        // exatamente como o mod de referencia faz. Com isPed=true o attach falha.
+        // prende na mao direita - igual v1 (isPed=true, vertex=1). So a rotacao
+        // muda pra corrigir o "de cabeca pra baixo" (BagRotX=180 no .ini).
         int bone = Function.Call<int>(Hash.GET_PED_BONE_INDEX, player, 57005 /*SKEL_R_Hand*/);
-        Function.Call(Hash.DETACH_ENTITY, bagProp, false, false);
         Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, bagProp, player, bone,
             bagOffX, bagOffY, bagOffZ, bagRotX, bagRotY, bagRotZ,
-            false, false, false, false, 2, true);
+            true, true, false, true, 1, true);
 
         // andar normalmente segurando algo (clipset de movimento)
         Function.Call(Hash.REQUEST_CLIP_SET, bagClipset);
