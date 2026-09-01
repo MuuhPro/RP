@@ -58,11 +58,11 @@ public class SerialKiller : Script
     private bool cinematicKill = true;
 
     // offsets ajustaveis (edite no .ini e aperte Insert pra recarregar)
-    private float bagOffX = 0.14f, bagOffY = 0.06f, bagOffZ = -0.16f;
-    private float bagRotX = 180f,  bagRotY = 0f,    bagRotZ = 0f;
-    private float carOffX = 0.42f, carOffY = 0.08f, carOffZ = 0.22f;
-    private float carRotX = 0f,    carRotY = 0f,    carRotZ = 200f;
-    private float dragOffX= 0.0f,  dragOffY=-0.85f, dragOffZ=-0.75f;
+    private float bagOffX = 0.10f, bagOffY = 0.00f, bagOffZ = -0.15f;
+    private float bagRotX = 0f,    bagRotY = 0f,    bagRotZ = 0f;
+    private float carOffX = 0.27f, carOffY = 0.16f, carOffZ = 0.63f;
+    private float carRotX = 0f,    carRotY = 0f,    carRotZ = 0f;
+    private float dragOffX= 0.0f,  dragOffY=-0.85f, dragOffZ=-0.55f;
     private float dragRotX= 0f,    dragRotY= 90f,   dragRotZ= 0f;
 
     // sistema de evidencias / suspeita
@@ -123,11 +123,11 @@ public class SerialKiller : Script
         showHelp     = s.GetValue("Settings", "ShowHelpUI", true);
         cinematicKill= s.GetValue("Settings", "CinematicKill", true);
 
-        bagOffX = s.GetValue("Offsets", "BagOffX", 0.14f); bagOffY = s.GetValue("Offsets", "BagOffY", 0.06f); bagOffZ = s.GetValue("Offsets", "BagOffZ", -0.16f);
-        bagRotX = s.GetValue("Offsets", "BagRotX", 180f);  bagRotY = s.GetValue("Offsets", "BagRotY", 0f);    bagRotZ = s.GetValue("Offsets", "BagRotZ", 0f);
-        carOffX = s.GetValue("Offsets", "CarryOffX", 0.42f); carOffY = s.GetValue("Offsets", "CarryOffY", 0.08f); carOffZ = s.GetValue("Offsets", "CarryOffZ", 0.22f);
-        carRotX = s.GetValue("Offsets", "CarryRotX", 0f);    carRotY = s.GetValue("Offsets", "CarryRotY", 0f);     carRotZ = s.GetValue("Offsets", "CarryRotZ", 200f);
-        dragOffX= s.GetValue("Offsets", "DragOffX", 0.0f);   dragOffY= s.GetValue("Offsets", "DragOffY", -0.85f);  dragOffZ= s.GetValue("Offsets", "DragOffZ", -0.75f);
+        bagOffX = s.GetValue("Offsets", "BagOffX", 0.10f); bagOffY = s.GetValue("Offsets", "BagOffY", 0.00f); bagOffZ = s.GetValue("Offsets", "BagOffZ", -0.15f);
+        bagRotX = s.GetValue("Offsets", "BagRotX", 0f);    bagRotY = s.GetValue("Offsets", "BagRotY", 0f);    bagRotZ = s.GetValue("Offsets", "BagRotZ", 0f);
+        carOffX = s.GetValue("Offsets", "CarryOffX", 0.27f); carOffY = s.GetValue("Offsets", "CarryOffY", 0.16f); carOffZ = s.GetValue("Offsets", "CarryOffZ", 0.63f);
+        carRotX = s.GetValue("Offsets", "CarryRotX", 0f);    carRotY = s.GetValue("Offsets", "CarryRotY", 0f);     carRotZ = s.GetValue("Offsets", "CarryRotZ", 0f);
+        dragOffX= s.GetValue("Offsets", "DragOffX", 0.0f);   dragOffY= s.GetValue("Offsets", "DragOffY", -0.85f);  dragOffZ= s.GetValue("Offsets", "DragOffZ", -0.55f);
         dragRotX= s.GetValue("Offsets", "DragRotX", 0f);     dragRotY= s.GetValue("Offsets", "DragRotY", 90f);     dragRotZ= s.GetValue("Offsets", "DragRotZ", 0f);
 
         showEvidence = s.GetValue("Evidence", "ShowSuspicionBar", true);
@@ -315,6 +315,12 @@ public class SerialKiller : Script
         {
             Ped victim = carrying;
             victim.Detach();
+            victim.IsVisible = true;
+            Function.Call(Hash.SET_ENTITY_COLLISION, victim, true, true);
+            // coloca ele em pe no chao, na sua frente
+            Vector3 front = player.Position + player.ForwardVector * 0.6f;
+            victim.PositionNoOffset = front;
+            victim.Heading = player.Heading;
             victim.Task.ClearAll();
             player.Task.ClearAll();
             if (tiedPeds.Contains(victim)) PlayAnim(victim, TIED, -1);
@@ -329,16 +335,16 @@ public class SerialKiller : Script
         Subdue(v);
         Function.Call(Hash.SET_PED_CAN_RAGDOLL, v, false);
         Function.Call(Hash.FREEZE_ENTITY_POSITION, v, false);
+        v.IsVisible = true;
 
         // voce se abaixa e pega o corpo antes de por nas costas
         PlayAnimBlocking(player, PICKUP, 1100);
 
-        // player carrega, corpo fica mole nas costas (offsets ajustaveis no .ini)
+        // player carrega, corpo fica mole no ombro (attach no root pra ficar visivel)
         PlayAnim(player, CARRY_ME, -1);
         PlayAnim(v, CARRY_HIM, -1);
 
-        int spine = Function.Call<int>(Hash.GET_PED_BONE_INDEX, player, 24816 /*SKEL_Spine3*/);
-        Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, v, player, spine,
+        Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, v, player, 0,
             carOffX, carOffY, carOffZ, carRotX, carRotY, carRotZ,
             false, false, false, false, 2, true);
 
@@ -396,7 +402,7 @@ public class SerialKiller : Script
         Function.Call(Hash.SET_CURRENT_PED_WEAPON, player, knifeHash, true);
 
         Function.Call(Hash.TASK_TURN_PED_TO_FACE_ENTITY, player, victim, 800);
-        Wait(400);
+        Wait(500);
 
         // camera cinematica focando a vitima
         Camera cam = null;
@@ -411,8 +417,10 @@ public class SerialKiller : Script
             World.RenderingCamera = cam;
         }
 
-        PlayAnim(player, KNIFE, 0);
-        Wait(1200);
+        // limpa a task de sacar arma pra a anim do golpe realmente tocar,
+        // e toca a facada esperando ela acontecer (o bug era duracao 0)
+        Function.Call(Hash.CLEAR_PED_TASKS, player);
+        PlayAnimBlocking(player, KNIFE, 1600);
 
         // sangue: na vitima e no chao
         Function.Call(Hash.APPLY_PED_DAMAGE_PACK, victim, "BigHitByVehicle", 0.0f, 1.0f);
@@ -795,7 +803,7 @@ public class SerialKiller : Script
     // Barra de suspeita (sistema de evidencias) no canto superior direito
     private void DrawHeat()
     {
-        float cx = 0.86f, cy = 0.14f, w = 0.16f, h = 0.018f;
+        float cx = 0.86f, cy = 0.72f, w = 0.16f, h = 0.018f;
         float frac = heat / 100f;
 
         // fundo
