@@ -45,6 +45,8 @@ public class SerialKiller : Script
     private static readonly Anim SEARCH   = new Anim("amb@medic@standing@kneel@base", "base", 1);
     private static readonly Anim PICKUP   = new Anim("pickup_object", "pickup_low", 0);   // abaixar pra pegar
     private static readonly Anim PUTDOWN  = new Anim("pickup_object", "putdown_low", 0);  // abaixar pra soltar
+    // pegar/soltar corpo (metodo do LosSantosSerialKiller - fica ancorado ao chao)
+    private static readonly Anim SNOW_PICK = new Anim("anim@mp_snowball", "pickup_snowball", 0);
     private static readonly Anim MASK     = new Anim("mp_masks@on_foot", "put_on_mask", 0);            // colocar mascara
     private static readonly Anim CLEAN    = new Anim("timetable@floyd@clean_kitchen@base", "base", 1); // limpar vestigios
 
@@ -67,6 +69,12 @@ public class SerialKiller : Script
     private float dragOffX= 0.0f,  dragOffY=-0.85f, dragOffZ=-0.55f;
     private float dragRotX= 0f,    dragRotY= 90f,   dragRotZ= 0f;
 
+    // corpo embrulhado (metodo do LosSantosSerialKiller: carrega um PROP, nao o ped)
+    private string corpseModel = "prop_water_corpse_02";
+    private bool   wrapFade = true;
+    private float corpOffX=-0.08f, corpOffY=0.22f, corpOffZ=-0.18f;
+    private float corpRotX=0f,     corpRotY=45f,   corpRotZ=90f;
+
     // sistema de evidencias / suspeita
     private bool showEvidence = true;
     private int  maskDrawable = 5;   // varia por modelo de ped (veja README)
@@ -82,8 +90,11 @@ public class SerialKiller : Script
     private Prop shovelProp;
     private bool digging;
     private readonly List<Ped> tiedPeds = new List<Ped>();
-    private Ped carrying;
     private Ped dragging;
+
+    // corpo embrulhado sendo carregado (prop, nao ped)
+    private Prop bodyProp;
+    private bool carryingBody;
 
     private bool masked;
     private int  prevMaskDrawable, prevMaskTexture;
@@ -133,6 +144,11 @@ public class SerialKiller : Script
         carRotX = s.GetValue("Offsets", "CarryRotX", 0f);    carRotY = s.GetValue("Offsets", "CarryRotY", 0f);     carRotZ = s.GetValue("Offsets", "CarryRotZ", 0f);
         dragOffX= s.GetValue("Offsets", "DragOffX", 0.0f);   dragOffY= s.GetValue("Offsets", "DragOffY", -0.85f);  dragOffZ= s.GetValue("Offsets", "DragOffZ", -0.55f);
         dragRotX= s.GetValue("Offsets", "DragRotX", 0f);     dragRotY= s.GetValue("Offsets", "DragRotY", 90f);     dragRotZ= s.GetValue("Offsets", "DragRotZ", 0f);
+
+        corpseModel = s.GetValue("Body", "ModelName", "prop_water_corpse_02");
+        wrapFade    = s.GetValue("Body", "WrapFade", true);
+        corpOffX = s.GetValue("Offsets", "CorpseOffX", -0.08f); corpOffY = s.GetValue("Offsets", "CorpseOffY", 0.22f); corpOffZ = s.GetValue("Offsets", "CorpseOffZ", -0.18f);
+        corpRotX = s.GetValue("Offsets", "CorpseRotX", 0f);     corpRotY = s.GetValue("Offsets", "CorpseRotY", 45f);   corpRotZ = s.GetValue("Offsets", "CorpseRotZ", 90f);
 
         showEvidence = s.GetValue("Evidence", "ShowSuspicionBar", true);
         maskDrawable = s.GetValue("Evidence", "MaskDrawable", 5);
@@ -325,79 +341,88 @@ public class SerialKiller : Script
     {
         Ped player = Game.Player.Character;
 
-        if (carrying != null && carrying.Exists())
+        // ---- ja carregando um corpo -> larga no chao ----
+        if (carryingBody && bodyProp != null && bodyProp.Exists())
         {
-            Ped victim = carrying;
-            victim.Detach();
-            victim.IsVisible = true;
-            Function.Call(Hash.SET_ENTITY_COLLISION, victim, true, true);
-            // coloca ele em pe no chao, na sua frente
-            Vector3 front = player.Position + player.ForwardVector * 0.6f;
-            victim.PositionNoOffset = front;
-            victim.Heading = player.Heading;
-            victim.Task.ClearAll();
-            player.Task.ClearAll();
-            if (tiedPeds.Contains(victim)) PlayAnim(victim, TIED, -1);
-            carrying = null;
-            Notify("~y~Voce largou o NPC.");
+            Function.Call(Hash.RESET_PED_MOVEMENT_CLIPSET, player, 0.0f);
+            PlayAnimBlocking(player, SNOW_PICK, 700);
+            bodyProp.Detach();
+            Function.Call(Hash.SET_ENTITY_COLLISION, bodyProp, true, true);
+            Function.Call(Hash.PLACE_OBJECT_ON_GROUND_PROPERLY, bodyProp);
+            bodyProp.IsPositionFrozen = true;
+            carryingBody = false;
+            Notify("~y~Voce largou o corpo.");
             return;
         }
 
+        // ---- achar vitima, embrulhar num PROP e carregar ----
         Ped v = ClosestPed();
         if (v == null) { Notify("~r~Nenhum NPC por perto."); return; }
 
-        Subdue(v);
-        Function.Call(Hash.SET_PED_CAN_RAGDOLL, v, false);
-        Function.Call(Hash.FREEZE_ENTITY_POSITION, v, false);
-        v.IsVisible = true;
+        // ajoelha (anim ancorada ao chao)
+        PlayAnimBlocking(player, SEARCH, 1500);
 
-        // desliga a colisao do NPC: senao a capsula dele trava o player no lugar
-        Function.Call(Hash.SET_ENTITY_COLLISION, v, false, false);
+        Vector3 pos = v.Position;
 
-        // 1) prende o corpo no jogador (cena sincronizada -> offset 0)
-        Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, v, player, 0,
-            carOffX, carOffY, carOffZ, carRotX, carRotY, carRotZ,
-            false, false, false, false, 2, true);
+        // fade preto pra trocar o ped vivo pelo corpo-prop sem glitch
+        if (wrapFade) { Function.Call(Hash.DO_SCREEN_FADE_OUT, 500); Wait(650); }
 
-        // 2) toca os dois clipes da mesma cena (encaixam sozinhos)
-        PlayAnim(player, CARRY_ME, -1);
-        PlayAnim(v, CARRY_HIM, -1);
+        tiedPeds.Remove(v);
+        if (v.Exists()) v.Delete();
 
-        carrying = v;
-        Notify("~g~Carregando o NPC.~s~ (Numpad " + KeyNum(kVicTrunk) + " pra por no porta-mala)");
+        Model cm = LoadFirstModel(new string[] { corpseModel, "prop_water_corpse_02", "prop_rub_binbag_01" });
+        if (cm.Hash == 0) { if (wrapFade) Function.Call(Hash.DO_SCREEN_FADE_IN, 400); Notify("~r~Falha ao criar o corpo."); return; }
+
+        bodyProp = World.CreateProp(cm, pos, false, false);
+        cm.MarkAsNoLongerNeeded();
+        if (bodyProp == null || !bodyProp.Exists()) { if (wrapFade) Function.Call(Hash.DO_SCREEN_FADE_IN, 400); return; }
+
+        // prende na mao e ativa o box_carry (anda normal segurando)
+        int bone = Function.Call<int>(Hash.GET_PED_BONE_INDEX, player, 57005 /*SKEL_R_Hand*/);
+        Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, bodyProp, player, bone,
+            corpOffX, corpOffY, corpOffZ, corpRotX, corpRotY, corpRotZ,
+            true, true, false, true, 1, true);
+        Function.Call(Hash.SET_ENTITY_COLLISION, bodyProp, false, false);
+
+        Function.Call(Hash.REQUEST_CLIP_SET, "anim@heists@box_carry@");
+        int t = 0;
+        while (!Function.Call<bool>(Hash.HAS_CLIP_SET_LOADED, "anim@heists@box_carry@") && t < 100) { Wait(0); t++; }
+        Function.Call(Hash.SET_PED_MOVEMENT_CLIPSET, player, "anim@heists@box_carry@", 1.0f);
+
+        if (wrapFade) Function.Call(Hash.DO_SCREEN_FADE_IN, 600);
+        carryingBody = true;
+        Notify("~g~Carregando o corpo.~s~ (Numpad " + KeyNum(kVicTrunk) + " pra por no porta-mala)");
     }
 
     // =========================================================================
-    //  5) NPC -> PORTA-MALA
+    //  5) CORPO -> PORTA-MALA
     // =========================================================================
     private void VictimToTrunk()
     {
-        if (carrying == null || !carrying.Exists())
-        { Notify("~r~Voce nao esta carregando ninguem."); return; }
+        if (!carryingBody || bodyProp == null || !bodyProp.Exists())
+        { Notify("~r~Voce nao esta carregando nenhum corpo."); return; }
 
         Vehicle veh = World.GetClosestVehicle(Game.Player.Character.Position, vehicleDist);
         if (veh == null) { Notify("~r~Nenhum veiculo por perto."); return; }
 
-        Ped victim = carrying;
+        Ped player = Game.Player.Character;
+        Function.Call(Hash.RESET_PED_MOVEMENT_CLIPSET, player, 0.0f);
+        carryingBody = false;
+
         OpenTrunk(veh);
         Wait(900);
 
-        victim.Detach();
-        Game.Player.Character.Task.ClearAll();
-
-        // guarda no porta-mala e SOME (invisivel dentro, sem colisao)
+        bodyProp.Detach();
         int boot = Function.Call<int>(Hash.GET_ENTITY_BONE_INDEX_BY_NAME, veh, "boot");
-        Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, victim, veh, boot,
+        Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, bodyProp, veh, boot,
             0.0f, -0.3f, -0.2f, 0.0f, 0.0f, 0.0f,
-            true, true, false, false, 2, true);
-        Function.Call(Hash.SET_ENTITY_INVINCIBLE, victim, true);
-        Function.Call(Hash.SET_ENTITY_COLLISION, victim, false, false);
-        victim.IsVisible = false;
+            true, true, false, false, 1, true);
+        Function.Call(Hash.SET_ENTITY_COLLISION, bodyProp, false, false);
+        bodyProp.IsVisible = false;
 
         Wait(700);
         CloseTrunk(veh);
-        carrying = null;
-        Notify("~g~NPC guardado no porta-mala.~s~ (sumiu dentro)");
+        Notify("~g~Corpo guardado no porta-mala.");
     }
 
     // =========================================================================
@@ -686,9 +711,10 @@ public class SerialKiller : Script
         Function.Call(Hash.RESET_PED_MOVEMENT_CLIPSET, player, 0.0f);
         player.Task.ClearAll();
 
-        // garante que a camera cinematica volta ao normal
+        // garante que a camera e o fade voltam ao normal
         World.RenderingCamera = null;
         World.DestroyAllCameras();
+        Function.Call(Hash.DO_SCREEN_FADE_IN, 300);
 
         if (bagProp != null && bagProp.Exists()) { bagProp.Detach(); bagProp.Delete(); }
         holdingBag = false;
@@ -696,8 +722,8 @@ public class SerialKiller : Script
         if (shovelProp != null && shovelProp.Exists()) shovelProp.Delete();
         digging = false;
 
-        if (carrying != null && carrying.Exists()) { carrying.Detach(); carrying.Task.ClearAll(); }
-        carrying = null;
+        if (bodyProp != null && bodyProp.Exists()) { bodyProp.Detach(); bodyProp.Delete(); }
+        carryingBody = false;
 
         if (dragging != null && dragging.Exists()) { dragging.Detach(); dragging.Task.ClearAll(); }
         dragging = null;
@@ -773,6 +799,21 @@ public class SerialKiller : Script
         if (ms > 0) Wait(ms);
     }
 
+    // Tenta carregar o primeiro modelo valido da lista. Retorna Model (Hash==0 se falhou).
+    private Model LoadFirstModel(string[] names)
+    {
+        foreach (string n in names)
+        {
+            Model m = new Model(n);
+            if (!m.IsValid) continue;
+            m.Request(1000);
+            int t = 0;
+            while (!m.IsLoaded && t < 60) { Wait(10); t++; }
+            if (m.IsLoaded) return m;
+        }
+        return new Model(0);
+    }
+
     private void OpenTrunk(Vehicle veh)
     {
         Function.Call(Hash.SET_VEHICLE_DOOR_OPEN, veh, 5, false, false);
@@ -815,8 +856,8 @@ public class SerialKiller : Script
             "~s~" + KeyNum(kBag)      + " Saco (pega/solta)",
             "~s~" + KeyNum(kBagTrunk) + " Saco -> porta-mala",
             "~s~" + KeyNum(kTie)      + " Amarrar NPC",
-            "~s~" + KeyNum(kCarry)    + " Carregar NPC",
-            "~s~" + KeyNum(kVicTrunk) + " NPC -> porta-mala",
+            "~s~" + KeyNum(kCarry)    + " Carregar corpo",
+            "~s~" + KeyNum(kVicTrunk) + " Corpo -> porta-mala",
             "~s~" + KeyNum(kKnife)    + " Faca (matar)",
             "~s~" + KeyNum(kDrag)     + " Arrastar corpo",
             "~s~" + KeyNum(kDig)      + " Cavar/enterrar",
