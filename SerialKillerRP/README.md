@@ -18,6 +18,32 @@ Mod de RP de serial killer feito pra gravação de vídeo. Todas as ações fica
 | **Numpad 7** | **Arrasta / solta** o corpo mais próximo |
 | **Numpad 8** | **Cavar** (pega uma pá). Ao **parar de cavar**, o corpo mais próximo **afunda no chão e some** (enterrado de verdade) |
 | **Numpad 9** | **PÂNICO** — cancela e solta tudo (tecla de segurança) |
+| **Numpad 0** | **Máscara** — coloca / tira a máscara (com animação de puxar pro rosto) |
+| **Numpad .** (Decimal) | **Limpar vestígios** — animação de esfregar o chão, apaga o sangue por perto e abaixa a suspeita |
+
+### Animações (agora completo)
+
+Cada ação tem o **gesto do personagem**, não é mais "teleporte":
+
+- **Amarrar**: a vítima se apavora e você **se abaixa atrás dela** pra amarrar.
+- **Carregar**: você **se abaixa e pega o corpo** antes de por nas costas.
+- **Saco**: você **se abaixa pra pegar** e **se abaixa pra soltar**.
+- **Arrastar**: você **agarra o corpo** antes de sair puxando.
+- **Faca / Cavar / Máscara / Limpar**: todas com animação própria.
+
+### Sistema de evidências (suspeita)
+
+Uma barra **SUSPEITA** aparece no canto (dá pra desligar no `.ini`). Ela sobe e
+desce conforme suas ações — ótimo pra dar tensão no vídeo:
+
+- **Matar** sobe a suspeita. Se tiver **NPCs vendo** (testemunhas), eles **fogem
+  apavorados** e a suspeita sobe mais ainda.
+- **Máscara** reduz o quanto as testemunhas te "identificam" (sobe menos).
+- **Enterrar o corpo** e **limpar vestígios** abaixam a suspeita.
+- Se a barra **chega a 100%**, a **polícia é acionada** (procurado nível 3).
+
+Assim você monta um arco no vídeo: mata → aparece testemunha → suspeita sobe →
+você corre pra esconder o corpo e limpar o sangue → suspeita baixa. Puro drama.
 
 O fluxo de RP fica: `Numpad 3` amarrar → `Numpad 6` matar (ou `Numpad 4` carregar
 vivo) → `Numpad 1` saco → `Numpad 5`/`Numpad 2` porta-mala → dirigir → `Numpad 7`
@@ -93,18 +119,32 @@ Já implementado:
 - ✅ **Faca na mão de verdade + sangue** na execução (Numpad 6)
 - ✅ **Câmera cinemática** no momento da morte (Numpad 6, liga/desliga no `.ini`)
 - ✅ **Cova que engole o corpo** — enterra de verdade ao parar de cavar (Numpad 8)
+- ✅ **Máscara com animação** (Numpad 0)
+- ✅ **Limpar vestígios com animação** (Numpad .)
+- ✅ **Sistema de evidências / suspeita** com testemunhas e polícia
+- ✅ **Gestos completos** em amarrar / carregar / arrastar / pegar saco
 
-Ainda dá pra adicionar (é só pedir):
+### 10 sugestões novas pra aumentar o RP do vídeo
 
-1. **Limpar vestígios** — uma tecla com animação de esfregão pra "limpar o sangue"
-   depois do crime.
-2. **Modo furtivo** — reduzir o áudio dos passos e deixar NPCs menos atentos
-   enquanto você segura o saco/corpo.
-3. **Amordaçar / vendar** — prop de fita/venda no NPC amarrado, com animação de
-   medo em loop pra ficar mais dramático.
-4. **Marcador de "cena do crime"** — um blip no mapa onde você deixou um corpo,
-   pra facilitar a gravação/edição.
-5. **Serial signature** — deixar um "objeto assinatura" (ex.: uma carta/prop) ao
-   lado da vítima, coisa clássica de filme de serial killer.
+1. **Kit do assassino (rueda/menu de armas)** — uma tecla que dá faca, machado,
+   marreta, motosserra e serrote; troca a arma da execução conforme a "assinatura".
+2. **Diálogo/fala da vítima** — a vítima implora ("por favor, não!") com legenda
+   e som antes de morrer. Dá muito drama pro corte.
+3. **Refém que anda na sua frente** — em vez de carregar, o NPC amarrado **anda
+   empurrado** na sua frente (mãos na cabeça), tipo sequestro.
+4. **Interrogatório** — amarra o NPC na cadeira, você faz perguntas (menu) e ele
+   "responde" com animações de medo; cena clássica de filme.
+5. **Modo furtivo real** — abaixar, andar sem som, e um "medidor de detecção" do
+   NPC alvo (igual jogo stealth) antes do bote.
+6. **Câmeras de segurança** — props de câmera que, se te virem, disparam a
+   suspeita; você pode destruí-las pra apagar as "provas".
+7. **Investigador / detetive** — quando a suspeita sobe, spawna um detetive que
+   anda até a cena do crime, examina e sai atrás de você.
+8. **Freezer / porão** — um ponto no mapa onde você "guarda" os corpos e conta
+   quantas vítimas já fez (contador de kills na tela).
+9. **Chuva de sangue / decais fortes** — respingo de sangue na sua roupa e rastro
+   de sangue no chão enquanto arrasta o corpo.
+10. **Modo "notícia"** — depois de X mortes, aparece um alerta estilo manchete na
+    tela ("Serial killer aterroriza Los Santos"), ótimo pra transição de cena.
 
 Me fala quais dessas você quer que eu adicione.

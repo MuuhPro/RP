@@ -38,8 +38,16 @@ public class SerialKiller : Script
     private static readonly Anim DRAG_BODY= new Anim("combat@damage@writhe", "writhe_loop", 49);
     private static readonly Anim DIG      = new Anim("amb@world_human_gardener_plant@male@base", "base", 49);
 
+    // gestos do killer (voce se abaixa / faz o movimento)
+    private static readonly Anim SEARCH   = new Anim("anim@gangops@facility@servers@bodysearch@", "player_search", 0); // amarrar (abaixa atras)
+    private static readonly Anim FEAR_PED = new Anim("anim@gangops@facility@servers@bodysearch@", "ped_search", 49);    // vitima durante amarrar
+    private static readonly Anim PICKUP   = new Anim("pickup_object", "pickup_low", 0);   // abaixar pra pegar
+    private static readonly Anim PUTDOWN  = new Anim("pickup_object", "putdown_low", 0);  // abaixar pra soltar
+    private static readonly Anim MASK     = new Anim("mp_masks@on_foot", "put_on_mask", 48);            // colocar mascara
+    private static readonly Anim CLEAN    = new Anim("timetable@floyd@clean_kitchen@base", "base", 49); // limpar vestigios
+
     // -------------------- config (lido do .ini) ------------------------------
-    private Keys kBag, kBagTrunk, kTie, kCarry, kVicTrunk, kKnife, kDrag, kDig, kPanic;
+    private Keys kBag, kBagTrunk, kTie, kCarry, kVicTrunk, kKnife, kDrag, kDig, kPanic, kMask, kClean;
     private float interactDist = 2.5f;
     private float vehicleDist  = 3.5f;
     private string bagModel   = "prop_cs_rub_binbag_01";
@@ -47,6 +55,15 @@ public class SerialKiller : Script
     private string shovelModel= "prop_tool_shovel";
     private bool showHelp = true;
     private bool cinematicKill = true;
+
+    // sistema de evidencias / suspeita
+    private bool showEvidence = true;
+    private int  maskDrawable = 5;   // varia por modelo de ped (veja README)
+    private int  maskTexture  = 0;
+    private float killHeat    = 20f;
+    private float buryHeat    = 15f;
+    private float cleanHeat   = 12f;
+    private float witnessHeat = 8f;
 
     // -------------------- estado ---------------------------------------------
     private Prop bagProp;
@@ -56,6 +73,10 @@ public class SerialKiller : Script
     private readonly List<Ped> tiedPeds = new List<Ped>();
     private Ped carrying;
     private Ped dragging;
+
+    private bool masked;
+    private int  prevMaskDrawable, prevMaskTexture;
+    private float heat;   // 0 a 100 (medidor de suspeita)
 
     public SerialKiller()
     {
@@ -82,6 +103,8 @@ public class SerialKiller : Script
         kDrag     = ParseKey(s.GetValue("Keys", "DragToggle",    "NumPad7"), Keys.NumPad7);
         kDig      = ParseKey(s.GetValue("Keys", "DigToggle",     "NumPad8"), Keys.NumPad8);
         kPanic    = ParseKey(s.GetValue("Keys", "PanicReset",    "NumPad9"), Keys.NumPad9);
+        kMask     = ParseKey(s.GetValue("Keys", "MaskToggle",    "NumPad0"), Keys.NumPad0);
+        kClean    = ParseKey(s.GetValue("Keys", "CleanEvidence", "Decimal"), Keys.Decimal);
 
         interactDist = s.GetValue("Settings", "InteractDistance", 2.5f);
         vehicleDist  = s.GetValue("Settings", "VehicleDistance",  3.5f);
@@ -90,6 +113,14 @@ public class SerialKiller : Script
         shovelModel  = s.GetValue("Settings", "ShovelModel","prop_tool_shovel");
         showHelp     = s.GetValue("Settings", "ShowHelpUI", true);
         cinematicKill= s.GetValue("Settings", "CinematicKill", true);
+
+        showEvidence = s.GetValue("Evidence", "ShowSuspicionBar", true);
+        maskDrawable = s.GetValue("Evidence", "MaskDrawable", 5);
+        maskTexture  = s.GetValue("Evidence", "MaskTexture", 0);
+        killHeat     = s.GetValue("Evidence", "KillHeat", 20f);
+        buryHeat     = s.GetValue("Evidence", "BuryHeat", 15f);
+        cleanHeat    = s.GetValue("Evidence", "CleanHeat", 12f);
+        witnessHeat  = s.GetValue("Evidence", "WitnessHeat", 8f);
     }
 
     private Keys ParseKey(string val, Keys fallback)
@@ -112,6 +143,8 @@ public class SerialKiller : Script
         else if (e.KeyCode == kDrag)     ToggleDrag();
         else if (e.KeyCode == kDig)      ToggleDig();
         else if (e.KeyCode == kPanic)    PanicReset();
+        else if (e.KeyCode == kMask)     ToggleMask();
+        else if (e.KeyCode == kClean)    CleanEvidence();
     }
 
     // =========================================================================
@@ -128,7 +161,12 @@ public class SerialKiller : Script
             Function.Call(Hash.SET_PED_CAN_RAGDOLL, p, false);
         }
 
-        if (showHelp) DrawHelp();
+        // suspeita esfria bem devagar quando voce nao faz nada
+        if (heat > 0f) heat -= 0.02f;
+        if (heat < 0f) heat = 0f;
+
+        if (showHelp)     DrawHelp();
+        if (showEvidence) DrawHeat();
     }
 
     // =========================================================================
@@ -146,6 +184,9 @@ public class SerialKiller : Script
         Model m = new Model(bagModel);
         m.Request(1000);
         if (!m.IsLoaded) { Notify("~r~Falha ao carregar o prop do saco."); return; }
+
+        // abaixa pra "pegar" o saco do chao
+        PlayAnimBlocking(player, PICKUP, 900);
 
         bagProp = World.CreateProp(m, player.Position, false, false);
         m.MarkAsNoLongerNeeded();
@@ -171,6 +212,9 @@ public class SerialKiller : Script
     {
         Ped player = Game.Player.Character;
         Function.Call(Hash.RESET_PED_MOVEMENT_CLIPSET, player, 0.0f);
+
+        // abaixa pra "colocar" o saco no chao
+        PlayAnimBlocking(player, PUTDOWN, 900);
 
         if (bagProp != null && bagProp.Exists())
         {
@@ -231,6 +275,11 @@ public class SerialKiller : Script
         }
 
         Subdue(ped);
+        // a vitima se apavora e voce se abaixa atras dela pra amarrar
+        PlayAnim(ped, FEAR_PED, -1);
+        PlayAnimBlocking(Game.Player.Character, SEARCH, 2200);
+        Game.Player.Character.Task.ClearAll();
+
         Function.Call(Hash.SET_ENABLE_HANDCUFFS, ped, true);
         PlayAnim(ped, TIED, -1);
         tiedPeds.Add(ped);
@@ -260,6 +309,9 @@ public class SerialKiller : Script
         if (v == null) { Notify("~r~Nenhum NPC por perto."); return; }
 
         Subdue(v);
+        // voce se abaixa e pega o corpo antes de por nas costas
+        PlayAnimBlocking(player, PICKUP, 1100);
+
         PlayAnim(player, CARRY_ME, -1);
         PlayAnim(v, CARRY_HIM, -1);
 
@@ -344,6 +396,10 @@ public class SerialKiller : Script
         BloodOnGround(victim.Position);
         victim.Kill();
 
+        // sistema de evidencias: sobe a suspeita e checa testemunhas
+        AddHeat(killHeat);
+        CheckWitnesses(victim);
+
         Wait(1400);
 
         if (cam != null)
@@ -384,6 +440,9 @@ public class SerialKiller : Script
 
         Ped v = ClosestPed();
         if (v == null) { Notify("~r~Nenhum corpo por perto."); return; }
+
+        // voce se abaixa e agarra o corpo antes de arrastar
+        PlayAnimBlocking(player, PICKUP, 900);
 
         Function.Call(Hash.SET_ENTITY_INVINCIBLE, v, true);
         PlayAnim(v, DRAG_BODY, -1);
@@ -460,7 +519,95 @@ public class SerialKiller : Script
             Wait(60);
         }
         body.Delete();
+        AddHeat(-buryHeat);   // sumir com o corpo reduz a suspeita
         Notify("~g~Corpo enterrado.");
+    }
+
+    // =========================================================================
+    //  MASCARA  (colocar / tirar, com animacao)
+    // =========================================================================
+    private void ToggleMask()
+    {
+        Ped player = Game.Player.Character;
+        PlayAnimBlocking(player, MASK, 1300);   // gesto de puxar a mascara pro rosto
+
+        if (!masked)
+        {
+            // guarda o visual atual pra poder voltar depois
+            prevMaskDrawable = Function.Call<int>(Hash.GET_PED_DRAWABLE_VARIATION, player, 1);
+            prevMaskTexture  = Function.Call<int>(Hash.GET_PED_TEXTURE_VARIATION, player, 1);
+            Function.Call(Hash.SET_PED_COMPONENT_VARIATION, player, 1, maskDrawable, maskTexture, 0);
+            masked = true;
+            Notify("~p~Mascara colocada.");
+        }
+        else
+        {
+            Function.Call(Hash.SET_PED_COMPONENT_VARIATION, player, 1, prevMaskDrawable, prevMaskTexture, 0);
+            masked = false;
+            Notify("~y~Mascara retirada.");
+        }
+    }
+
+    // =========================================================================
+    //  EVIDENCIAS  (limpar vestigios + medidor de suspeita)
+    // =========================================================================
+    private void CleanEvidence()
+    {
+        Ped player = Game.Player.Character;
+        PlayAnimBlocking(player, CLEAN, 2600);   // esfrega o chao
+
+        Vector3 pos = player.Position;
+        Function.Call(Hash.REMOVE_DECALS_IN_RANGE, pos.X, pos.Y, pos.Z, 6.0f);
+        player.Task.ClearAll();
+
+        AddHeat(-cleanHeat);
+        Notify("~g~Vestigios limpos.");
+    }
+
+    private void AddHeat(float amount)
+    {
+        heat += amount;
+        if (heat < 0f)   heat = 0f;
+        if (heat > 100f) heat = 100f;
+        if (heat >= 100f) Escalate();
+    }
+
+    private void Escalate()
+    {
+        // suspeita no maximo: a policia vem atras
+        Function.Call(Hash.SET_PLAYER_WANTED_LEVEL, Game.Player, 3, false);
+        Function.Call(Hash.SET_PLAYER_WANTED_LEVEL_NOW, Game.Player, false);
+        Notify("~r~Suspeita no maximo! A policia foi acionada.");
+    }
+
+    // Testemunhas: NPCs que viram o crime fogem e aumentam a suspeita.
+    // Se voce estiver de mascara, testemunham menos (nao te identificam).
+    private void CheckWitnesses(Ped victim)
+    {
+        Ped player = Game.Player.Character;
+        int witnesses = 0;
+
+        foreach (Ped p in World.GetNearbyPeds(player, 30f))
+        {
+            if (p == null || p == player || p.IsPlayer || p == victim) continue;
+            if (!p.IsAlive || tiedPeds.Contains(p)) continue;
+
+            // tem linha de visao ate voce?
+            if (Function.Call<bool>(Hash.HAS_ENTITY_CLEAR_LOS_TO_ENTITY, p, player, 17))
+            {
+                witnesses++;
+                Function.Call(Hash.TASK_SMART_FLEE_PED, p, player, 120f, -1, false, false);
+                Function.Call(Hash.SET_PED_KEEP_TASK, p, true);
+            }
+        }
+
+        if (witnesses > 0)
+        {
+            float gain = witnessHeat * witnesses;
+            if (masked) gain *= 0.4f;   // mascara = menos suspeita
+            AddHeat(gain);
+            Notify("~o~" + witnesses + " testemunha(s)!" + (masked ? " (mascara ajudou)" : ""));
+        }
     }
 
     // =========================================================================
@@ -499,6 +646,15 @@ public class SerialKiller : Script
             }
         }
         tiedPeds.Clear();
+
+        // tira a mascara e zera a suspeita
+        if (masked)
+        {
+            Function.Call(Hash.SET_PED_COMPONENT_VARIATION, player, 1, prevMaskDrawable, prevMaskTexture, 0);
+            masked = false;
+        }
+        heat = 0f;
+
         Notify("~b~Reset feito. Tudo solto.");
     }
 
@@ -543,6 +699,13 @@ public class SerialKiller : Script
             8.0f, -8.0f, duration, a.Flag, 0.0f, false, false, false);
     }
 
+    // Toca a animacao E espera ela acontecer (ms). Usado pros gestos do killer.
+    private void PlayAnimBlocking(Ped ped, Anim a, int ms)
+    {
+        PlayAnim(ped, a, ms < 0 ? -1 : ms);
+        if (ms > 0) Wait(ms);
+    }
+
     private void OpenTrunk(Vehicle veh)
     {
         Function.Call(Hash.SET_VEHICLE_DOOR_OPEN, veh, 5, false, false);
@@ -565,6 +728,17 @@ public class SerialKiller : Script
         return s;
     }
 
+    // Nome amigavel pra teclas que nao sao numero (ex.: Decimal -> ".")
+    private string KeyName(Keys k)
+    {
+        if (k == Keys.Decimal)  return ".";
+        if (k == Keys.Divide)   return "/";
+        if (k == Keys.Multiply) return "*";
+        if (k == Keys.Subtract) return "-";
+        if (k == Keys.Add)      return "+";
+        return KeyNum(k);
+    }
+
     // Lista de teclas desenhada no canto (pode desligar no .ini)
     private void DrawHelp()
     {
@@ -577,16 +751,35 @@ public class SerialKiller : Script
             "~s~" + KeyNum(kVicTrunk) + " NPC -> porta-mala",
             "~s~" + KeyNum(kKnife)    + " Faca (matar)",
             "~s~" + KeyNum(kDrag)     + " Arrastar corpo",
-            "~s~" + KeyNum(kDig)      + " Cavar",
+            "~s~" + KeyNum(kDig)      + " Cavar/enterrar",
+            "~s~" + KeyNum(kMask)     + " Mascara",
+            "~s~" + KeyName(kClean)   + " Limpar vestigios",
             "~s~" + KeyNum(kPanic)    + " PANICO (reset)"
         };
 
-        float y = 0.28f;
+        float y = 0.24f;
         for (int i = 0; i < lines.Length; i++)
         {
             DrawText(lines[i], 0.015f, y, 0.30f);
             y += 0.022f;
         }
+    }
+
+    // Barra de suspeita (sistema de evidencias) no canto superior direito
+    private void DrawHeat()
+    {
+        float cx = 0.86f, cy = 0.14f, w = 0.16f, h = 0.018f;
+        float frac = heat / 100f;
+
+        // fundo
+        Function.Call(Hash.DRAW_RECT, cx, cy, w + 0.006f, h + 0.008f, 0, 0, 0, 160);
+        // preenchimento (verde -> amarelo -> vermelho), alinhado a esquerda
+        int r = (int)(255f * Math.Min(1f, frac * 2f));
+        int g = (int)(255f * Math.Min(1f, (1f - frac) * 2f));
+        float fillX = cx - (w / 2f) + (w * frac / 2f);
+        Function.Call(Hash.DRAW_RECT, fillX, cy, w * frac, h, r, g, 0, 220);
+
+        DrawText("SUSPEITA " + (int)heat + "%", cx - 0.075f, cy - 0.032f, 0.32f);
     }
 
     private void DrawText(string text, float x, float y, float scale)
