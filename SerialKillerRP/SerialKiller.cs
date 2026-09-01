@@ -203,16 +203,14 @@ public class SerialKiller : Script
     {
         Ped player = Game.Player.Character;
         Model m = new Model(bagModel);
-        m.Request(2000);
+        m.Request(1000);
         int mt = 0;
-        while (!m.IsLoaded && mt < 200) { Wait(5); mt++; }
+        while (!m.IsLoaded && mt < 100) { Wait(10); mt++; }
         if (!m.IsLoaded) { Notify("~r~Falha ao carregar o prop do saco."); return; }
 
-        bagProp = World.CreateProp(m, player.Position + new Vector3(0f, 0f, 1f), true, false);
+        bagProp = World.CreateProp(m, player.Position, false, false);
         m.MarkAsNoLongerNeeded();
         if (bagProp == null || !bagProp.Exists()) { Notify("~r~Nao consegui criar o saco."); return; }
-        bagProp.IsVisible = true;
-        bagProp.IsPositionFrozen = false;
 
         // prende na mao direita (offsets ajustaveis no .ini)
         int bone = Function.Call<int>(Hash.GET_PED_BONE_INDEX, player, 57005 /*SKEL_R_Hand*/);
@@ -342,6 +340,9 @@ public class SerialKiller : Script
         Function.Call(Hash.SET_PED_CAN_RAGDOLL, v, false);
         Function.Call(Hash.FREEZE_ENTITY_POSITION, v, false);
         v.IsVisible = true;
+
+        // desliga a colisao do NPC: senao a capsula dele trava o player no lugar
+        Function.Call(Hash.SET_ENTITY_COLLISION, v, false, false);
 
         // 1) prende o corpo no jogador (cena sincronizada -> offset 0)
         Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, v, player, 0,
