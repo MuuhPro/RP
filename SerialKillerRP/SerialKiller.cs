@@ -33,18 +33,19 @@ public class SerialKiller : Script
 
     private static readonly Anim TIED     = new Anim("mp_arresting", "idle", 49);
     private static readonly Anim CARRY_ME = new Anim("missfinale_c2mcs_1", "fin_c2_mcs_1_camman", 49);
-    private static readonly Anim CARRY_HIM= new Anim("nm@hands", "hands_up", 49);
+    // corpo carregado: anim de corpo mole em loop (full-body) pra nao ficar em T-pose
+    private static readonly Anim CARRY_HIM= new Anim("combat@damage@writhe", "writhe_loop", 1);
     private static readonly Anim KNIFE    = new Anim("melee@knife@streamed_core", "plyr_takedown_front_slice", 0);
-    private static readonly Anim DRAG_BODY= new Anim("combat@damage@writhe", "writhe_loop", 49);
+    private static readonly Anim DRAG_BODY= new Anim("combat@damage@writhe", "writhe_loop", 1);
     private static readonly Anim DIG      = new Anim("amb@world_human_gardener_plant@male@base", "base", 49);
 
     // gestos do killer (voce se abaixa / faz o movimento)
-    private static readonly Anim SEARCH   = new Anim("anim@gangops@facility@servers@bodysearch@", "player_search", 0); // amarrar (abaixa atras)
-    private static readonly Anim FEAR_PED = new Anim("anim@gangops@facility@servers@bodysearch@", "ped_search", 49);    // vitima durante amarrar
+    // ajoelhar no chao pra amarrar (anim ancorada ao chao, nao flutua)
+    private static readonly Anim SEARCH   = new Anim("amb@medic@standing@kneel@base", "base", 1);
     private static readonly Anim PICKUP   = new Anim("pickup_object", "pickup_low", 0);   // abaixar pra pegar
     private static readonly Anim PUTDOWN  = new Anim("pickup_object", "putdown_low", 0);  // abaixar pra soltar
-    private static readonly Anim MASK     = new Anim("mp_masks@on_foot", "put_on_mask", 48);            // colocar mascara
-    private static readonly Anim CLEAN    = new Anim("timetable@floyd@clean_kitchen@base", "base", 49); // limpar vestigios
+    private static readonly Anim MASK     = new Anim("mp_masks@on_foot", "put_on_mask", 0);            // colocar mascara
+    private static readonly Anim CLEAN    = new Anim("timetable@floyd@clean_kitchen@base", "base", 1); // limpar vestigios
 
     // -------------------- config (lido do .ini) ------------------------------
     private Keys kBag, kBagTrunk, kTie, kCarry, kVicTrunk, kKnife, kDrag, kDig, kPanic, kMask, kClean;
@@ -55,6 +56,14 @@ public class SerialKiller : Script
     private string shovelModel= "prop_tool_shovel";
     private bool showHelp = true;
     private bool cinematicKill = true;
+
+    // offsets ajustaveis (edite no .ini e aperte Insert pra recarregar)
+    private float bagOffX = 0.14f, bagOffY = 0.06f, bagOffZ = -0.16f;
+    private float bagRotX = 180f,  bagRotY = 0f,    bagRotZ = 0f;
+    private float carOffX = 0.42f, carOffY = 0.08f, carOffZ = 0.22f;
+    private float carRotX = 0f,    carRotY = 0f,    carRotZ = 200f;
+    private float dragOffX= 0.0f,  dragOffY=-0.85f, dragOffZ=-0.75f;
+    private float dragRotX= 0f,    dragRotY= 90f,   dragRotZ= 0f;
 
     // sistema de evidencias / suspeita
     private bool showEvidence = true;
@@ -113,6 +122,13 @@ public class SerialKiller : Script
         shovelModel  = s.GetValue("Settings", "ShovelModel","prop_tool_shovel");
         showHelp     = s.GetValue("Settings", "ShowHelpUI", true);
         cinematicKill= s.GetValue("Settings", "CinematicKill", true);
+
+        bagOffX = s.GetValue("Offsets", "BagOffX", 0.14f); bagOffY = s.GetValue("Offsets", "BagOffY", 0.06f); bagOffZ = s.GetValue("Offsets", "BagOffZ", -0.16f);
+        bagRotX = s.GetValue("Offsets", "BagRotX", 180f);  bagRotY = s.GetValue("Offsets", "BagRotY", 0f);    bagRotZ = s.GetValue("Offsets", "BagRotZ", 0f);
+        carOffX = s.GetValue("Offsets", "CarryOffX", 0.42f); carOffY = s.GetValue("Offsets", "CarryOffY", 0.08f); carOffZ = s.GetValue("Offsets", "CarryOffZ", 0.22f);
+        carRotX = s.GetValue("Offsets", "CarryRotX", 0f);    carRotY = s.GetValue("Offsets", "CarryRotY", 0f);     carRotZ = s.GetValue("Offsets", "CarryRotZ", 200f);
+        dragOffX= s.GetValue("Offsets", "DragOffX", 0.0f);   dragOffY= s.GetValue("Offsets", "DragOffY", -0.85f);  dragOffZ= s.GetValue("Offsets", "DragOffZ", -0.75f);
+        dragRotX= s.GetValue("Offsets", "DragRotX", 0f);     dragRotY= s.GetValue("Offsets", "DragRotY", 90f);     dragRotZ= s.GetValue("Offsets", "DragRotZ", 0f);
 
         showEvidence = s.GetValue("Evidence", "ShowSuspicionBar", true);
         maskDrawable = s.GetValue("Evidence", "MaskDrawable", 5);
@@ -192,10 +208,10 @@ public class SerialKiller : Script
         m.MarkAsNoLongerNeeded();
         if (bagProp == null) { Notify("~r~Nao consegui criar o saco."); return; }
 
-        // prende na mao direita
+        // prende na mao direita (offsets ajustaveis no .ini)
         int bone = Function.Call<int>(Hash.GET_PED_BONE_INDEX, player, 57005 /*SKEL_R_Hand*/);
         Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, bagProp, player, bone,
-            0.12f, 0.02f, -0.03f, 0.0f, 90.0f, 0.0f,
+            bagOffX, bagOffY, bagOffZ, bagRotX, bagRotY, bagRotZ,
             true, true, false, true, 1, true);
 
         // andar normalmente segurando algo (clipset de movimento)
@@ -244,11 +260,14 @@ public class SerialKiller : Script
         OpenTrunk(veh);
         Wait(900);
 
+        // guarda no porta-mala e SOME (fica invisivel dentro, sem colisao)
         bagProp.Detach();
         int boot = Function.Call<int>(Hash.GET_ENTITY_BONE_INDEX_BY_NAME, veh, "boot");
         Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, bagProp, veh, boot,
-            0.0f, 0.0f, 0.35f, 0.0f, 0.0f, 0.0f,
+            0.0f, -0.25f, -0.1f, 0.0f, 0.0f, 0.0f,
             true, true, false, false, 1, true);
+        Function.Call(Hash.SET_ENTITY_COLLISION, bagProp, false, false);
+        bagProp.IsVisible = false;
 
         Wait(700);
         CloseTrunk(veh);
@@ -275,13 +294,12 @@ public class SerialKiller : Script
         }
 
         Subdue(ped);
-        // a vitima se apavora e voce se abaixa atras dela pra amarrar
-        PlayAnim(ped, FEAR_PED, -1);
+        // a vitima ja levanta as maos e voce se ajoelha no chao pra amarrar
+        Function.Call(Hash.SET_ENABLE_HANDCUFFS, ped, true);
+        PlayAnim(ped, TIED, -1);
         PlayAnimBlocking(Game.Player.Character, SEARCH, 2200);
         Game.Player.Character.Task.ClearAll();
 
-        Function.Call(Hash.SET_ENABLE_HANDCUFFS, ped, true);
-        PlayAnim(ped, TIED, -1);
         tiedPeds.Add(ped);
         Notify("~g~NPC amarrado.~s~ (Numpad " + KeyNum(kCarry) + " pra carregar)");
     }
@@ -309,14 +327,19 @@ public class SerialKiller : Script
         if (v == null) { Notify("~r~Nenhum NPC por perto."); return; }
 
         Subdue(v);
+        Function.Call(Hash.SET_PED_CAN_RAGDOLL, v, false);
+        Function.Call(Hash.FREEZE_ENTITY_POSITION, v, false);
+
         // voce se abaixa e pega o corpo antes de por nas costas
         PlayAnimBlocking(player, PICKUP, 1100);
 
+        // player carrega, corpo fica mole nas costas (offsets ajustaveis no .ini)
         PlayAnim(player, CARRY_ME, -1);
         PlayAnim(v, CARRY_HIM, -1);
 
-        Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, v, player, 0,
-            0.27f, 0.15f, 0.63f, 0.5f, 0.5f, 0.0f,
+        int spine = Function.Call<int>(Hash.GET_PED_BONE_INDEX, player, 24816 /*SKEL_Spine3*/);
+        Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, v, player, spine,
+            carOffX, carOffY, carOffZ, carRotX, carRotY, carRotZ,
             false, false, false, false, 2, true);
 
         carrying = v;
@@ -341,18 +364,19 @@ public class SerialKiller : Script
         victim.Detach();
         Game.Player.Character.Task.ClearAll();
 
+        // guarda no porta-mala e SOME (invisivel dentro, sem colisao)
         int boot = Function.Call<int>(Hash.GET_ENTITY_BONE_INDEX_BY_NAME, veh, "boot");
         Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, victim, veh, boot,
-            0.0f, 0.2f, 0.25f, 90.0f, 0.0f, 90.0f,
+            0.0f, -0.3f, -0.2f, 0.0f, 0.0f, 0.0f,
             true, true, false, false, 2, true);
-
-        PlayAnim(victim, DRAG_BODY, -1);
-        Function.Call(Hash.SET_ENTITY_INVINCIBLE, victim, true); // nao "some" preso
+        Function.Call(Hash.SET_ENTITY_INVINCIBLE, victim, true);
+        Function.Call(Hash.SET_ENTITY_COLLISION, victim, false, false);
+        victim.IsVisible = false;
 
         Wait(700);
         CloseTrunk(veh);
         carrying = null;
-        Notify("~g~NPC guardado no porta-mala.");
+        Notify("~g~NPC guardado no porta-mala.~s~ (sumiu dentro)");
     }
 
     // =========================================================================
@@ -445,10 +469,12 @@ public class SerialKiller : Script
         PlayAnimBlocking(player, PICKUP, 900);
 
         Function.Call(Hash.SET_ENTITY_INVINCIBLE, v, true);
+        Function.Call(Hash.SET_PED_CAN_RAGDOLL, v, false);
         PlayAnim(v, DRAG_BODY, -1);
 
+        // corpo preso atras de voce, no chao (offsets ajustaveis no .ini)
         Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, v, player, 0,
-            0.0f, -0.65f, -0.9f, 90.0f, 0.0f, 0.0f,
+            dragOffX, dragOffY, dragOffZ, dragRotX, dragRotY, dragRotZ,
             false, false, false, false, 2, true);
 
         dragging = v;
@@ -537,8 +563,9 @@ public class SerialKiller : Script
             prevMaskDrawable = Function.Call<int>(Hash.GET_PED_DRAWABLE_VARIATION, player, 1);
             prevMaskTexture  = Function.Call<int>(Hash.GET_PED_TEXTURE_VARIATION, player, 1);
             Function.Call(Hash.SET_PED_COMPONENT_VARIATION, player, 1, maskDrawable, maskTexture, 0);
+            player.Task.ClearAll();
             masked = true;
-            Notify("~p~Mascara colocada.");
+            Notify("~p~Mascara colocada.~s~ (se nao aparecer, veja MaskDrawable no .ini)");
         }
         else
         {
