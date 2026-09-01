@@ -246,11 +246,13 @@ public class SerialKiller : Script
         m.MarkAsNoLongerNeeded();
         if (bagProp == null || !bagProp.Exists()) { Notify("~r~Nao consegui criar o saco."); return; }
 
-        // prende na mao direita (offsets ajustaveis no .ini)
+        // prende na mao direita. IMPORTANTE: isPed=false (eh um PROP!) e vertex=2,
+        // exatamente como o mod de referencia faz. Com isPed=true o attach falha.
         int bone = Function.Call<int>(Hash.GET_PED_BONE_INDEX, player, 57005 /*SKEL_R_Hand*/);
+        Function.Call(Hash.DETACH_ENTITY, bagProp, false, false);
         Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, bagProp, player, bone,
             bagOffX, bagOffY, bagOffZ, bagRotX, bagRotY, bagRotZ,
-            true, true, false, true, 1, true);
+            false, false, false, false, 2, true);
 
         // andar normalmente segurando algo (clipset de movimento)
         Function.Call(Hash.REQUEST_CLIP_SET, bagClipset);
@@ -807,9 +809,11 @@ public class SerialKiller : Script
     {
         if (bodyProp == null || !bodyProp.Exists()) return;
         int bone = Function.Call<int>(Hash.GET_PED_BONE_INDEX, player, corpBone);
+        // isPed=false (eh um PROP) e vertex=2 -> igual ao mod de referencia
+        Function.Call(Hash.DETACH_ENTITY, bodyProp, false, false);
         Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, bodyProp, player, bone,
             corpOffX, corpOffY, corpOffZ, corpRotX, corpRotY, corpRotZ,
-            true, true, false, true, 1, true);
+            false, false, false, false, 2, true);
     }
 
     // Mantem o corpo carregado estavel: re-aplica a anim e o attach todo tick
