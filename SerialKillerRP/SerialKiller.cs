@@ -32,9 +32,10 @@ public class SerialKiller : Script
         public Anim(string d, string n, int f) { Dict = d; Name = n; Flag = f; } }
 
     private static readonly Anim TIED     = new Anim("mp_arresting", "idle", 49);
-    private static readonly Anim CARRY_ME = new Anim("missfinale_c2mcs_1", "fin_c2_mcs_1_camman", 49);
-    // corpo carregado: anim de corpo mole em loop (full-body) pra nao ficar em T-pose
-    private static readonly Anim CARRY_HIM= new Anim("combat@damage@writhe", "writhe_loop", 1);
+    // carregar: os dois clipes vem da MESMA cena sincronizada do final do jogo.
+    // camman = quem carrega, greg = o corpo carregado. Assim eles encaixam.
+    private static readonly Anim CARRY_ME = new Anim("missfinale_c2mcs_1", "fin_c2_mcs_1_camman", 17);
+    private static readonly Anim CARRY_HIM= new Anim("missfinale_c2mcs_1", "fin_c2_mcs_1_greg", 1);
     private static readonly Anim KNIFE    = new Anim("melee@knife@streamed_core", "plyr_takedown_front_slice", 0);
     private static readonly Anim DRAG_BODY= new Anim("combat@damage@writhe", "writhe_loop", 1);
     private static readonly Anim DIG      = new Anim("amb@world_human_gardener_plant@male@base", "base", 49);
@@ -58,9 +59,9 @@ public class SerialKiller : Script
     private bool cinematicKill = true;
 
     // offsets ajustaveis (edite no .ini e aperte Insert pra recarregar)
-    private float bagOffX = 0.10f, bagOffY = 0.00f, bagOffZ = -0.15f;
-    private float bagRotX = 0f,    bagRotY = 0f,    bagRotZ = 0f;
-    private float carOffX = 0.27f, carOffY = 0.16f, carOffZ = 0.63f;
+    private float bagOffX = 0.12f, bagOffY = 0.02f, bagOffZ = -0.03f;
+    private float bagRotX = 0f,    bagRotY = 90f,   bagRotZ = 0f;
+    private float carOffX = 0.00f, carOffY = 0.00f, carOffZ = 0.00f;
     private float carRotX = 0f,    carRotY = 0f,    carRotZ = 0f;
     private float dragOffX= 0.0f,  dragOffY=-0.85f, dragOffZ=-0.55f;
     private float dragRotX= 0f,    dragRotY= 90f,   dragRotZ= 0f;
@@ -123,9 +124,9 @@ public class SerialKiller : Script
         showHelp     = s.GetValue("Settings", "ShowHelpUI", true);
         cinematicKill= s.GetValue("Settings", "CinematicKill", true);
 
-        bagOffX = s.GetValue("Offsets", "BagOffX", 0.10f); bagOffY = s.GetValue("Offsets", "BagOffY", 0.00f); bagOffZ = s.GetValue("Offsets", "BagOffZ", -0.15f);
-        bagRotX = s.GetValue("Offsets", "BagRotX", 0f);    bagRotY = s.GetValue("Offsets", "BagRotY", 0f);    bagRotZ = s.GetValue("Offsets", "BagRotZ", 0f);
-        carOffX = s.GetValue("Offsets", "CarryOffX", 0.27f); carOffY = s.GetValue("Offsets", "CarryOffY", 0.16f); carOffZ = s.GetValue("Offsets", "CarryOffZ", 0.63f);
+        bagOffX = s.GetValue("Offsets", "BagOffX", 0.12f); bagOffY = s.GetValue("Offsets", "BagOffY", 0.02f); bagOffZ = s.GetValue("Offsets", "BagOffZ", -0.03f);
+        bagRotX = s.GetValue("Offsets", "BagRotX", 0f);    bagRotY = s.GetValue("Offsets", "BagRotY", 90f);   bagRotZ = s.GetValue("Offsets", "BagRotZ", 0f);
+        carOffX = s.GetValue("Offsets", "CarryOffX", 0.00f); carOffY = s.GetValue("Offsets", "CarryOffY", 0.00f); carOffZ = s.GetValue("Offsets", "CarryOffZ", 0.00f);
         carRotX = s.GetValue("Offsets", "CarryRotX", 0f);    carRotY = s.GetValue("Offsets", "CarryRotY", 0f);     carRotZ = s.GetValue("Offsets", "CarryRotZ", 0f);
         dragOffX= s.GetValue("Offsets", "DragOffX", 0.0f);   dragOffY= s.GetValue("Offsets", "DragOffY", -0.85f);  dragOffZ= s.GetValue("Offsets", "DragOffZ", -0.55f);
         dragRotX= s.GetValue("Offsets", "DragRotX", 0f);     dragRotY= s.GetValue("Offsets", "DragRotY", 90f);     dragRotZ= s.GetValue("Offsets", "DragRotZ", 0f);
@@ -198,15 +199,16 @@ public class SerialKiller : Script
     {
         Ped player = Game.Player.Character;
         Model m = new Model(bagModel);
-        m.Request(1000);
+        m.Request(2000);
+        int mt = 0;
+        while (!m.IsLoaded && mt < 200) { Wait(5); mt++; }
         if (!m.IsLoaded) { Notify("~r~Falha ao carregar o prop do saco."); return; }
 
-        // abaixa pra "pegar" o saco do chao
-        PlayAnimBlocking(player, PICKUP, 900);
-
-        bagProp = World.CreateProp(m, player.Position, false, false);
+        bagProp = World.CreateProp(m, player.Position + new Vector3(0f, 0f, 1f), true, false);
         m.MarkAsNoLongerNeeded();
-        if (bagProp == null) { Notify("~r~Nao consegui criar o saco."); return; }
+        if (bagProp == null || !bagProp.Exists()) { Notify("~r~Nao consegui criar o saco."); return; }
+        bagProp.IsVisible = true;
+        bagProp.IsPositionFrozen = false;
 
         // prende na mao direita (offsets ajustaveis no .ini)
         int bone = Function.Call<int>(Hash.GET_PED_BONE_INDEX, player, 57005 /*SKEL_R_Hand*/);
@@ -337,16 +339,14 @@ public class SerialKiller : Script
         Function.Call(Hash.FREEZE_ENTITY_POSITION, v, false);
         v.IsVisible = true;
 
-        // voce se abaixa e pega o corpo antes de por nas costas
-        PlayAnimBlocking(player, PICKUP, 1100);
-
-        // player carrega, corpo fica mole no ombro (attach no root pra ficar visivel)
-        PlayAnim(player, CARRY_ME, -1);
-        PlayAnim(v, CARRY_HIM, -1);
-
+        // 1) prende o corpo no jogador (cena sincronizada -> offset 0)
         Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, v, player, 0,
             carOffX, carOffY, carOffZ, carRotX, carRotY, carRotZ,
             false, false, false, false, 2, true);
+
+        // 2) toca os dois clipes da mesma cena (encaixam sozinhos)
+        PlayAnim(player, CARRY_ME, -1);
+        PlayAnim(v, CARRY_HIM, -1);
 
         carrying = v;
         Notify("~g~Carregando o NPC.~s~ (Numpad " + KeyNum(kVicTrunk) + " pra por no porta-mala)");
@@ -396,13 +396,10 @@ public class SerialKiller : Script
 
         Subdue(victim);
 
-        // faca de verdade na mao
-        int knifeHash = Function.Call<int>(Hash.GET_HASH_KEY, "WEAPON_KNIFE");
-        Function.Call(Hash.GIVE_WEAPON_TO_PED, player, knifeHash, 1, false, true);
-        Function.Call(Hash.SET_CURRENT_PED_WEAPON, player, knifeHash, true);
-
-        Function.Call(Hash.TASK_TURN_PED_TO_FACE_ENTITY, player, victim, 800);
-        Wait(500);
+        // vira pra vitima direto (sem usar task, que atrapalha a anim)
+        Vector3 dir = victim.Position - player.Position;
+        player.Heading = Function.Call<float>(Hash.GET_HEADING_FROM_VECTOR_2D, dir.X, dir.Y);
+        Wait(300);
 
         // camera cinematica focando a vitima
         Camera cam = null;
@@ -417,10 +414,30 @@ public class SerialKiller : Script
             World.RenderingCamera = cam;
         }
 
-        // limpa a task de sacar arma pra a anim do golpe realmente tocar,
-        // e toca a facada esperando ela acontecer (o bug era duracao 0)
-        Function.Call(Hash.CLEAR_PED_TASKS, player);
+        // TIRA qualquer arma da mao: uma arma equipada cria uma task que
+        // sobrepoe a animacao (por isso o golpe nunca tocava). Sem arma, a
+        // anim toca; a faca vira um PROP na mao so pro visual.
+        Function.Call(Hash.SET_CURRENT_PED_WEAPON, player,
+            Function.Call<int>(Hash.GET_HASH_KEY, "WEAPON_UNARMED"), true);
+        Function.Call(Hash.CLEAR_PED_TASKS_IMMEDIATELY, player);
+
+        Prop knife = null;
+        Model km = new Model("w_me_knife");
+        km.Request(1000);
+        int kt = 0; while (!km.IsLoaded && kt < 100) { Wait(5); kt++; }
+        if (km.IsLoaded)
+        {
+            knife = World.CreateProp(km, player.Position, false, false);
+            km.MarkAsNoLongerNeeded();
+            int hb = Function.Call<int>(Hash.GET_PED_BONE_INDEX, player, 57005 /*SKEL_R_Hand*/);
+            Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, knife, player, hb,
+                0.09f, 0.03f, 0.0f, 0.0f, 0.0f, 0.0f, true, true, false, true, 1, true);
+        }
+
+        // agora a facada realmente toca (full-body, esperando terminar)
         PlayAnimBlocking(player, KNIFE, 1600);
+
+        if (knife != null && knife.Exists()) knife.Delete();
 
         // sangue: na vitima e no chao
         Function.Call(Hash.APPLY_PED_DAMAGE_PACK, victim, "BigHitByVehicle", 0.0f, 1.0f);
@@ -803,7 +820,7 @@ public class SerialKiller : Script
     // Barra de suspeita (sistema de evidencias) no canto superior direito
     private void DrawHeat()
     {
-        float cx = 0.86f, cy = 0.72f, w = 0.16f, h = 0.018f;
+        float cx = 0.90f, cy = 0.175f, w = 0.10f, h = 0.016f;
         float frac = heat / 100f;
 
         // fundo
@@ -814,7 +831,7 @@ public class SerialKiller : Script
         float fillX = cx - (w / 2f) + (w * frac / 2f);
         Function.Call(Hash.DRAW_RECT, fillX, cy, w * frac, h, r, g, 0, 220);
 
-        DrawText("SUSPEITA " + (int)heat + "%", cx - 0.075f, cy - 0.032f, 0.32f);
+        DrawText("SUSPEITA " + (int)heat + "%", cx - 0.055f, cy - 0.028f, 0.28f);
     }
 
     private void DrawText(string text, float x, float y, float scale)
