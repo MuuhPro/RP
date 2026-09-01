@@ -46,6 +46,7 @@ public class SerialKiller : Script
     private string bagClipset = "anim@heists@box_carry@";
     private string shovelModel= "prop_tool_shovel";
     private bool showHelp = true;
+    private bool cinematicKill = true;
 
     // -------------------- estado ---------------------------------------------
     private Prop bagProp;
@@ -88,6 +89,7 @@ public class SerialKiller : Script
         bagClipset   = s.GetValue("Settings", "BagClipset", "anim@heists@box_carry@");
         shovelModel  = s.GetValue("Settings", "ShovelModel","prop_tool_shovel");
         showHelp     = s.GetValue("Settings", "ShowHelpUI", true);
+        cinematicKill= s.GetValue("Settings", "CinematicKill", true);
     }
 
     private Keys ParseKey(string val, Keys fallback)
@@ -302,7 +304,7 @@ public class SerialKiller : Script
     }
 
     // =========================================================================
-    //  6) EXECUCAO COM FACA
+    //  6) EXECUCAO COM FACA (faca na mao + sangue + camera cinematica)
     // =========================================================================
     private void KnifeKill()
     {
@@ -311,15 +313,57 @@ public class SerialKiller : Script
         if (victim == null) { Notify("~r~Nenhum NPC por perto."); return; }
 
         Subdue(victim);
+
+        // faca de verdade na mao
+        int knifeHash = Function.Call<int>(Hash.GET_HASH_KEY, "WEAPON_KNIFE");
+        Function.Call(Hash.GIVE_WEAPON_TO_PED, player, knifeHash, 1, false, true);
+        Function.Call(Hash.SET_CURRENT_PED_WEAPON, player, knifeHash, true);
+
         Function.Call(Hash.TASK_TURN_PED_TO_FACE_ENTITY, player, victim, 800);
         Wait(400);
+
+        // camera cinematica focando a vitima
+        Camera cam = null;
+        if (cinematicKill)
+        {
+            Vector3 camPos = player.Position
+                           + player.ForwardVector * 1.8f
+                           + player.RightVector   * 1.2f
+                           + new Vector3(0f, 0f, 0.35f);
+            cam = World.CreateCamera(camPos, Vector3.Zero, 50f);
+            cam.PointAt(victim);
+            World.RenderingCamera = cam;
+        }
 
         PlayAnim(player, KNIFE, 0);
         Wait(1200);
 
+        // sangue: na vitima e no chao
         Function.Call(Hash.APPLY_PED_DAMAGE_PACK, victim, "BigHitByVehicle", 0.0f, 1.0f);
+        Function.Call(Hash.APPLY_PED_DAMAGE_PACK, victim, "SCR_Dumpster", 0.0f, 1.0f);
+        BloodOnGround(victim.Position);
         victim.Kill();
+
+        Wait(1400);
+
+        if (cam != null)
+        {
+            World.RenderingCamera = null;
+            cam.Delete();
+        }
         Notify("~r~...");
+    }
+
+    private void BloodOnGround(Vector3 pos)
+    {
+        // decal de poca de sangue no chao (cosmetico; timeout -1 = permanente)
+        Function.Call(Hash.ADD_DECAL, 1023,
+            pos.X, pos.Y, pos.Z,
+            0f, 0f, -1f,   // direcao (pra baixo)
+            1f, 0f, 0f,    // vetor lateral
+            1.4f, 1.4f,    // largura, altura
+            0.5f, 0.0f, 0.0f, 1.0f,  // cor RGBA (vermelho)
+            -1f, false, false, false);
     }
 
     // =========================================================================
@@ -364,6 +408,10 @@ public class SerialKiller : Script
             player.Task.ClearAll();
             if (shovelProp != null && shovelProp.Exists()) shovelProp.Delete();
             digging = false;
+
+            // enterra de verdade: o corpo mais proximo afunda no chao e some
+            BuryNearest();
+
             Notify("~y~Parou de cavar.");
             return;
         }
@@ -384,6 +432,37 @@ public class SerialKiller : Script
         Notify("~g~Cavando...~s~ (mesma tecla pra parar)");
     }
 
+    private void BuryNearest()
+    {
+        Ped player = Game.Player.Character;
+        Ped body = null;
+        float bestDist = interactDist * 2f;
+        foreach (Ped p in World.GetNearbyPeds(player, interactDist * 2f))
+        {
+            if (p == null || p == player || p.IsPlayer) continue;
+            float d = player.Position.DistanceTo(p.Position);
+            if (d < bestDist) { body = p; bestDist = d; }
+        }
+        if (body == null) { Notify("~y~Nenhum corpo perto pra enterrar."); return; }
+
+        // se estava sendo arrastado/amarrado, libera as refs
+        if (dragging == body) { body.Detach(); dragging = null; }
+        tiedPeds.Remove(body);
+
+        Function.Call(Hash.SET_ENTITY_INVINCIBLE, body, false);
+        Function.Call(Hash.SET_ENTITY_COLLISION, body, false, false);
+
+        // afunda no chao aos poucos e some
+        Vector3 start = body.Position;
+        for (int i = 1; i <= 20; i++)
+        {
+            body.PositionNoOffset = new Vector3(start.X, start.Y, start.Z - i * 0.08f);
+            Wait(60);
+        }
+        body.Delete();
+        Notify("~g~Corpo enterrado.");
+    }
+
     // =========================================================================
     //  9) PANICO - solta tudo
     // =========================================================================
@@ -392,6 +471,10 @@ public class SerialKiller : Script
         Ped player = Game.Player.Character;
         Function.Call(Hash.RESET_PED_MOVEMENT_CLIPSET, player, 0.0f);
         player.Task.ClearAll();
+
+        // garante que a camera cinematica volta ao normal
+        World.RenderingCamera = null;
+        World.DestroyAllCameras();
 
         if (bagProp != null && bagProp.Exists()) { bagProp.Detach(); bagProp.Delete(); }
         holdingBag = false;

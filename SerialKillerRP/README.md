@@ -14,9 +14,9 @@ Mod de RP de serial killer feito pra gravação de vídeo. Todas as ações fica
 | **Numpad 3** | **Amarra / desamarra** o NPC mais próximo |
 | **Numpad 4** | **Carrega / larga** o NPC (nas costas) |
 | **Numpad 5** | Coloca o NPC que você carrega **dentro do porta-mala** |
-| **Numpad 6** | **Execução com faca** no NPC mais próximo (mata) |
+| **Numpad 6** | **Execução com faca** — faca de verdade na mão, sangue e câmera cinemática, depois mata |
 | **Numpad 7** | **Arrasta / solta** o corpo mais próximo |
-| **Numpad 8** | **Cavar / enterrar** (pega uma pá e faz a animação) |
+| **Numpad 8** | **Cavar** (pega uma pá). Ao **parar de cavar**, o corpo mais próximo **afunda no chão e some** (enterrado de verdade) |
 | **Numpad 9** | **PÂNICO** — cancela e solta tudo (tecla de segurança) |
 
 O fluxo de RP fica: `Numpad 3` amarrar → `Numpad 6` matar (ou `Numpad 4` carregar
@@ -68,6 +68,7 @@ recompilar nada).
   instalada, coloque o nome do clipset dela aqui. Por padrão usa
   `anim@heists@box_carry@` (do jogo base — anda segurando com as duas mãos).
 - **`ShowHelpUI`**: `true`/`false` pra mostrar/esconder a lista de teclas na tela.
+- **`CinematicKill`**: `true`/`false` pra ligar/desligar a câmera cinemática na execução (Numpad 6).
 
 ---
 
@@ -87,23 +88,23 @@ recompilar nada).
 
 ## Ideias pra deixar o RP ainda melhor
 
-Sugestões (algumas dá pra eu já implementar se quiser):
+Já implementado:
 
-1. **Sangue e faca na mão de verdade** — dar a arma `WEAPON_KNIFE` ao apertar
-   Numpad 6 e aplicar decal de sangue no chão/roupa.
-2. **Limpar vestígios** — uma tecla com animação de esfregão pra "limpar o sangue"
+- ✅ **Faca na mão de verdade + sangue** na execução (Numpad 6)
+- ✅ **Câmera cinemática** no momento da morte (Numpad 6, liga/desliga no `.ini`)
+- ✅ **Cova que engole o corpo** — enterra de verdade ao parar de cavar (Numpad 8)
+
+Ainda dá pra adicionar (é só pedir):
+
+1. **Limpar vestígios** — uma tecla com animação de esfregão pra "limpar o sangue"
    depois do crime.
-3. **Modo furtivo** — reduzir o áudio dos passos e deixar NPCs menos atentos
+2. **Modo furtivo** — reduzir o áudio dos passos e deixar NPCs menos atentos
    enquanto você segura o saco/corpo.
-4. **Cova que "engole" o corpo** — depois de cavar (Numpad 8), o corpo mais
-   próximo afunda no chão e some (enterrado de verdade).
-5. **Amordaçar / vendar** — prop de fita/venda no NPC amarrado, com animação de
+3. **Amordaçar / vendar** — prop de fita/venda no NPC amarrado, com animação de
    medo em loop pra ficar mais dramático.
-6. **Marcador de "cena do crime"** — um blip no mapa onde você deixou um corpo,
+4. **Marcador de "cena do crime"** — um blip no mapa onde você deixou um corpo,
    pra facilitar a gravação/edição.
-7. **Câmera de execução** — travar uma câmera cinemática por 2-3s no momento da
-   morte (bom pra corte no vídeo).
-8. **Serial signature** — deixar um "objeto assinatura" (ex.: uma carta/prop) ao
+5. **Serial signature** — deixar um "objeto assinatura" (ex.: uma carta/prop) ao
    lado da vítima, coisa clássica de filme de serial killer.
 
 Me fala quais dessas você quer que eu adicione.
