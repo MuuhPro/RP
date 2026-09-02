@@ -238,15 +238,12 @@ public class SerialKiller : Script
         m.MarkAsNoLongerNeeded();
         if (bagProp == null || !bagProp.Exists()) { Notify("~r~Nao consegui criar o saco."); return; }
 
-        // prende RIGIDO na mao (igual ao mod de referencia). O soft-pinning=true
-        // da v1 usava fisica de corda -> o saco "boiava" e ia longe. Aqui:
-        // p9=false, softPin=FALSE, collision=false, isPed=false, vertex=2, fixedRot=true.
-        int bone = Function.Call<int>(Hash.GET_PED_BONE_INDEX, player, 57005 /*SKEL_R_Hand*/);
+        // prende na mao usando a API do SHVDN (resolve o osso certinho).
+        // A chamada native manual estava colocando o saco na posicao errada.
         Function.Call(Hash.SET_ENTITY_COLLISION, bagProp, false, false);
-        Function.Call(Hash.DETACH_ENTITY, bagProp, false, false);
-        Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, bagProp, player, bone,
-            bagOffX, bagOffY, bagOffZ, bagRotX, bagRotY, bagRotZ,
-            false, false, false, false, 2, true);
+        bagProp.AttachTo(player.Bones[Bone.SkelRightHand],
+            new Vector3(bagOffX, bagOffY, bagOffZ),
+            new Vector3(bagRotX, bagRotY, bagRotZ));
 
         // andar normalmente segurando algo (clipset de movimento)
         Function.Call(Hash.REQUEST_CLIP_SET, bagClipset);
@@ -802,12 +799,11 @@ public class SerialKiller : Script
     private void AttachBodyToHand(Ped player)
     {
         if (bodyProp == null || !bodyProp.Exists()) return;
-        int bone = Function.Call<int>(Hash.GET_PED_BONE_INDEX, player, corpBone);
-        // isPed=false (eh um PROP) e vertex=2 -> igual ao mod de referencia
-        Function.Call(Hash.DETACH_ENTITY, bodyProp, false, false);
-        Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, bodyProp, player, bone,
-            corpOffX, corpOffY, corpOffZ, corpRotX, corpRotY, corpRotZ,
-            false, false, false, false, 2, true);
+        // API do SHVDN resolve o osso corretamente (corpBone = tag, ex.: 11816)
+        Function.Call(Hash.SET_ENTITY_COLLISION, bodyProp, false, false);
+        bodyProp.AttachTo(player.Bones[(Bone)corpBone],
+            new Vector3(corpOffX, corpOffY, corpOffZ),
+            new Vector3(corpRotX, corpRotY, corpRotZ));
     }
 
     // Mantem o corpo carregado estavel: re-aplica a anim e o attach todo tick
