@@ -66,7 +66,7 @@ public class SerialKiller : Script
 
     // offsets ajustaveis (edite no .ini e aperte Insert pra recarregar)
     private float bagOffX = 0.12f, bagOffY = 0.02f, bagOffZ = -0.03f;
-    private float bagRotX = 180f,  bagRotY = 90f,   bagRotZ = 0f;
+    private float bagRotX = 0f,     bagRotY = 90f,   bagRotZ = 0f;
     private float carOffX = 0.27f, carOffY = 0.16f, carOffZ = 0.63f;
     private float carRotX = 0f,    carRotY = 0f,    carRotZ = 0f;
     private float dragOffX= 0.0f,  dragOffY=-0.85f, dragOffZ=-0.55f;
@@ -143,7 +143,7 @@ public class SerialKiller : Script
         showNotifications = s.GetValue("Settings", "ShowNotifications", false);
 
         bagOffX = s.GetValue("Offsets", "BagOffX", 0.12f); bagOffY = s.GetValue("Offsets", "BagOffY", 0.02f); bagOffZ = s.GetValue("Offsets", "BagOffZ", -0.03f);
-        bagRotX = s.GetValue("Offsets", "BagRotX", 180f);  bagRotY = s.GetValue("Offsets", "BagRotY", 90f);   bagRotZ = s.GetValue("Offsets", "BagRotZ", 0f);
+        bagRotX = s.GetValue("Offsets", "BagRotX", 0f);    bagRotY = s.GetValue("Offsets", "BagRotY", 90f);   bagRotZ = s.GetValue("Offsets", "BagRotZ", 0f);
         carOffX = s.GetValue("Offsets", "CarryOffX", 0.27f); carOffY = s.GetValue("Offsets", "CarryOffY", 0.16f); carOffZ = s.GetValue("Offsets", "CarryOffZ", 0.63f);
         carRotX = s.GetValue("Offsets", "CarryRotX", 0f);    carRotY = s.GetValue("Offsets", "CarryRotY", 0f);     carRotZ = s.GetValue("Offsets", "CarryRotZ", 0f);
         dragOffX= s.GetValue("Offsets", "DragOffX", 0.0f);   dragOffY= s.GetValue("Offsets", "DragOffY", -0.85f);  dragOffZ= s.GetValue("Offsets", "DragOffZ", -0.55f);
