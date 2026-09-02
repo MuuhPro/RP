@@ -238,12 +238,15 @@ public class SerialKiller : Script
         m.MarkAsNoLongerNeeded();
         if (bagProp == null || !bagProp.Exists()) { Notify("~r~Nao consegui criar o saco."); return; }
 
-        // prende na mao direita - igual v1 (isPed=true, vertex=1). So a rotacao
-        // muda pra corrigir o "de cabeca pra baixo" (BagRotX=180 no .ini).
+        // prende RIGIDO na mao (igual ao mod de referencia). O soft-pinning=true
+        // da v1 usava fisica de corda -> o saco "boiava" e ia longe. Aqui:
+        // p9=false, softPin=FALSE, collision=false, isPed=false, vertex=2, fixedRot=true.
         int bone = Function.Call<int>(Hash.GET_PED_BONE_INDEX, player, 57005 /*SKEL_R_Hand*/);
+        Function.Call(Hash.SET_ENTITY_COLLISION, bagProp, false, false);
+        Function.Call(Hash.DETACH_ENTITY, bagProp, false, false);
         Function.Call(Hash.ATTACH_ENTITY_TO_ENTITY, bagProp, player, bone,
             bagOffX, bagOffY, bagOffZ, bagRotX, bagRotY, bagRotZ,
-            true, true, false, true, 1, true);
+            false, false, false, false, 2, true);
 
         // andar normalmente segurando algo (clipset de movimento)
         Function.Call(Hash.REQUEST_CLIP_SET, bagClipset);
